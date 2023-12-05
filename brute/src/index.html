@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tauri App</title>
+    <script type="module" src="/main.js" defer></script>
+    <style>
+        .logo.vanilla:hover {
+            filter: drop-shadow(0 0 2em #ffe21c);
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Welcome to Tauri!</h1>
+    <button type="button" id="btn-update-plots">Update Plots</button>
+    <div id="object_draw" style="width: 800px; height:600px"></div>
+</body>
+
+<script type='module'>
+
+    const {invoke} = window.__TAURI__.tauri;
+
+    import {createHistogram, draw, redraw} from '../node_modules/jsroot/modules/main.mjs';
+    let cnt = 0;
+    let histo = createHistogram('TH2I', 256, 256);
+    histo.fXaxis.fXmin = -10;
+    histo.fXaxis.fXmax = 10;
+    histo.fYaxis.fXmin = -10;
+    histo.fYaxis.fXmax = 10;
+    histo.fName = 'generated';
+    histo.fTitle = 'Complete Nothingness';
+
+    async function updateGUI() {
+        let result = await invoke('random_number', {});
+        for (let i = 0; i < result.length; i++) {
+            let item = result[i];
+            histo.Fill(item[0], item[1]);
+        }
+        redraw('object_draw', histo, 'col');
+    }
+    updateGUI();
+    setInterval(updateGUI, 300);
+    document.querySelector("#btn-update-plots").addEventListener('click', updateGUI);
+</script>
+
+</html>

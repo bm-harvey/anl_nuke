@@ -1,0 +1,14 @@
+/target
+""/target/""
+/data
+**/data/**
+**/build/**
+*.png
+*.root
+*.csv
+*.vs*
+*.cache
+*compile_commands.json
+__pycache__
+.png
+.pdf

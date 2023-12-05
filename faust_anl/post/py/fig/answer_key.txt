@@ -1,0 +1,64 @@
+
+raw_4a
+Answer: 9
+Count: 999999.0
+
+beta_4_9
+Answer: 2
+Count: 3141.0
+
+7a_thru_1be_scaled
+Answer: 7
+Count: 999.0
+
+7a_thru_2be
+Answer: 6
+Count: 5834.0
+
+7a_thru_c_3m_ds_cut
+Answer: 4
+Count: 4895.0
+
+raw_7a
+Answer: 5
+Count: 177769.0
+
+raw_3a
+Answer: 2
+Count: 999999.0
+
+beta_5_8
+Answer: 3
+Count: 1617.0
+
+7a_thru_hoyle
+Answer: 4
+Count: 1997.0
+
+7a_thru_2be_r
+Answer: 8
+Count: 2328.0
+
+7a_thru_c_3m
+Answer: 9
+Count: 33394.0
+
+beta_5_11
+Answer: 1
+Count: 2717.0
+
+beta_7_8
+Answer: 9
+Count: 2717.0
+
+raw_4a_thru_2be
+Answer: 8
+Count: 1584.0
+
+7a_thru_1be
+Answer: 8
+Count: 53380.0
+
+beta_3_9
+Answer: 6
+Count: 2717.0

@@ -1,0 +1,26 @@
+[package]
+name = "faust_anl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0.171", features = ["derive"] }
+clap = { version = "4.3.15", features = ["derive"] }
+#serde_json = "1.0.103"
+#csv = "1.2.2"
+rand = "0.8.5"
+rand_distr = "0.4.3"
+
+rkyv = { version = "0.7", features = ["validation"] }
+
+nukers = { path = "../nukers" }
+faust = { path = "../faust" }
+faust_filter = { path = "../faust_filter" }
+roost = { path = "../roost" }
+cxx = { version = "1.0.104", features = ["c++17"] }
+itertools = "0.11.0"
+nalgebra = "0.32.3"
+
+rayon = "1.7.0"
+num-integer = "0.1.45"
+lazy_static = "1.4.0"

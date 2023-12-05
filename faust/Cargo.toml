@@ -1,0 +1,15 @@
+[package]
+name = "faust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+glob = "0.3.1"
+clap = { version = "4.3.15", features = ["derive"] }
+rkyv = { version = "0.7", features = ["validation"] }
+nukers = { path = "../nukers" }
+serde = { version = "1.0.180" }
+rkyv_impl = "0.2.2"
+rand = "0.8.5"
+lazy_static = "1.4.0"
+rayon = "1.8.0"

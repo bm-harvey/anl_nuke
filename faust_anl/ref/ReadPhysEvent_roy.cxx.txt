@@ -1,0 +1,2180 @@
+//
+//	$Id: ReadPhysEvent_roy.cxx,v 1.2 2020/07/13 20:59:09 andyhannaman Exp $
+//
+#include "ReadPhysEvent_roy.h"
+
+#include "MomentumTensor.h"
+#include "PhysEvent.h"
+#include "SourceEnergy.h"
+//#include "MomentumTensorT.h"
+
+#include "FaustObjectManager.h"
+#include "FaustParameterManager.h"
+#include "TGeoElement.h"
+#include "TGeoManager.h"
+
+ClassImp(ReadPhysEvent_roy)
+
+    ReadPhysEvent_roy::ReadPhysEvent_roy() {}
+//_______________________________________________________________________
+
+ReadPhysEvent_roy::ReadPhysEvent_roy(const Char_t* name, const Char_t* title) :
+    CycModule(name, title) {
+    fSource = new SourceEnergy();
+    fSource2 = new SourceEnergy();
+    fTensor = new MomentumTensor();
+    //fTensorT = new MomentumTensorT();
+
+    TGeoManager* geom;
+    if (!gGeoManager)
+        geom = new TGeoManager("geom", "radionuclides");
+    else
+        geom = gGeoManager;
+    fTable = geom->GetElementTable();
+}
+//_______________________________________________________________________
+
+ReadPhysEvent_roy::~ReadPhysEvent_roy() {}
+//_______________________________________________________________________
+
+void ReadPhysEvent_roy::Init() {
+    SetState(kInit);
+    fParameterManager = FaustParameterManager::Instance();
+
+    fObjectManager = FaustObjectManager::Instance();
+    fObjectManager->Init();
+
+    fNevt = 0;
+}
+
+//_______________________________________________________________________
+
+void ReadPhysEvent_roy::DefineHistograms() {
+    printf("ReadPhysEvent_roy::inside of defining histograms\n");
+
+    TDirectory* savdir = gDirectory;
+    TString hName;
+
+    hName = Form("h_Unident_NumBe");
+    h_Unident_NumBe = new TH1F(hName, hName, 4, -0.5, 3.5);
+
+    hName = Form("h_7Alpha_Ex");
+    h_7Alpha_Ex = new TH1F(hName, hName, 250, 0, 200);
+
+    TString cNk[5] = {"N1k", "N5k", "N10k", "N40k", "N100k"};
+    for (int in = 0; in < 5; in++) {
+        hName = Form("h_7Alpha_Ex_%s", cNk[in].Data());
+        h_7Alpha_Ex_Nnk[in] = new TH1F(hName, hName, 250, 0, 200);
+    }
+
+    for (int in = 0; in < 3; in++) {
+        hName = Form("h_7Alpha_Ex_ifBe_Mult2_N1k%d", in);
+        h_7Alpha_Ex_ifBe_M2_N1k[in] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C0_N1k%d", in);
+        h_7Alpha_Ex_if12C0_N1k[in] = new TH1F(hName, hName, 250, 0, 200);
+    }
+
+    for (int in = 0; in < 20; in++) {
+        hName = Form("h_7Alpha_Ex_N10k_%d", in);
+        h_7Alpha_Ex_N10k[in] = new TH1F(hName, hName, 250, 0, 200);
+    }
+
+    for (int in = 0; in < 10; in++) {
+        hName = Form("h_7Alpha_Ex_N20k_%d", in);
+        h_7Alpha_Ex_N20k[in] = new TH1F(hName, hName, 250, 0, 200);
+    }
+
+    for (int in = 0; in < 4; in++) {
+        hName = Form("h_7Alpha_Ex_N45k_%d", in);
+        h_7Alpha_Ex_N45k[in] = new TH1F(hName, hName, 250, 0, 200);
+    }
+
+    hName = Form("h_7Alpha_Ex_Excl");
+    h_7Alpha_Ex_Excl = new TH1F(hName, hName, 250, 0, 200);
+
+    hName = Form("h_7Alpha_Ex_ifBe_Mult1");
+    h_7Alpha_Ex_ifBe_M1 = new TH1F(hName, hName, 250, 0, 200);
+
+    hName = Form("h_7Alpha_Ex_ifBe_Mult2");
+    h_7Alpha_Ex_ifBe_M2 = new TH1F(hName, hName, 250, 0, 200);
+
+    hName = Form("h_7Alpha_Ex_12C0");
+    h_7Alpha_Ex_if12C0 = new TH1F(hName, hName, 250, 0, 200);
+
+    hName = Form("h_7Alpha_Ex_12C3");
+    h_7Alpha_Ex_if12C3 = new TH1F(hName, hName, 250, 0, 200);
+
+    hName = Form("h_7Alpha_Ex_12C03");
+    h_7Alpha_Ex_if12C03 = new TH1F(hName, hName, 250, 0, 200);
+
+    for (int ie = 0; ie < 4; ie++) {
+        hName = Form("h_7Alpha_Ex_EkCut%d", ie + 2);
+        h_7Alpha_Ex_EkCut[ie] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_Excl_EkCut%d", ie + 2);
+        h_7Alpha_Ex_Excl_EkCut[ie] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_ifBe_Mult1_EkCut%d", ie + 2);
+        h_7Alpha_Ex_ifBe_M1_EkCut[ie] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_ifBe_Mult2_EkCut%d", ie + 2);
+        h_7Alpha_Ex_ifBe_M2_EkCut[ie] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C0_EkCut%d", ie + 2);
+        h_7Alpha_Ex_if12C0_EkCut[ie] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C3_EkCut%d", ie + 2);
+        h_7Alpha_Ex_if12C3_EkCut[ie] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C03_EkCut%d", ie + 2);
+        h_7Alpha_Ex_if12C03_EkCut[ie] = new TH1F(hName, hName, 250, 0, 200);
+    }
+
+    hName = Form("h_7Alpha_distRD");
+    h_7Alpha_distRD = new TH1F(hName, hName, 100, 0, 1.0);
+
+    hName = Form("h_7Alpha_distRS");
+    h_7Alpha_distRS = new TH1F(hName, hName, 100, 0, 1.0);
+
+    hName = Form("h_7Alpha_distDS");
+    h_7Alpha_distDS = new TH1F(hName, hName, 100, 0, 1.0);
+
+    //TString cRDCut[7]={"RDcut05","RDcut0510","RDcut1015","RDcut1520","RDcut2025","RDcutgt25"};
+    TString cRDCut[7] =
+        {"RDcut1", "RDcut2", "RDcut3", "RDcut4", "RDcut5", "RDcut6"};
+    for (int i = 0; i < 7; i++) {
+        hName = Form("h_7Alpha_Ex_%s", cRDCut[i].Data());
+        h_7Alpha_Ex_distRDCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_Excl_%s", cRDCut[i].Data());
+        h_7Alpha_Ex_Excl_distRDCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_ifBe_Mult1_%s", cRDCut[i].Data());
+        h_7Alpha_Ex_ifBe_M1_distRDCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_ifBe_Mult2_%s", cRDCut[i].Data());
+        h_7Alpha_Ex_ifBe_M2_distRDCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C0_%s", cRDCut[i].Data());
+        h_7Alpha_Ex_if12C0_distRDCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C3_%s", cRDCut[i].Data());
+        h_7Alpha_Ex_if12C3_distRDCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C03_%s", cRDCut[i].Data());
+        h_7Alpha_Ex_if12C03_distRDCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        for (int ie = 0; ie < 4; ie++) {
+            hName = Form("h_7Alpha_Ex_EkCut%d_%s", ie + 2, cRDCut[i].Data());
+            h_7Alpha_Ex_EkCut_RDCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName =
+                Form("h_7Alpha_Ex_Excl_EkCut%d_%s", ie + 2, cRDCut[i].Data());
+            h_7Alpha_Ex_Excl_EkCut_RDCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName = Form(
+                "h_7Alpha_Ex_ifBe_Mult1_EkCut%d_%s",
+                ie + 2,
+                cRDCut[i].Data());
+            h_7Alpha_Ex_ifBe_M1_EkCut_RDCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName = Form(
+                "h_7Alpha_Ex_ifBe_Mult2_EkCut%d_%s",
+                ie + 2,
+                cRDCut[i].Data());
+            h_7Alpha_Ex_ifBe_M2_EkCut_RDCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName =
+                Form("h_7Alpha_Ex_12C0_EkCut%d_%s", ie + 2, cRDCut[i].Data());
+            h_7Alpha_Ex_if12C0_EkCut_RDCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName =
+                Form("h_7Alpha_Ex_12C3_EkCut%d_%s", ie + 2, cRDCut[i].Data());
+            h_7Alpha_Ex_if12C3_EkCut_RDCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName =
+                Form("h_7Alpha_Ex_12C03_EkCut%d_%s", ie + 2, cRDCut[i].Data());
+            h_7Alpha_Ex_if12C03_EkCut_RDCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+        }
+    }
+
+    //TString cDSCut[7]={"DScut10","DScut1020","DScut2030","DScut3040","DScut4050","DScutgt50"};
+    TString cDSCut[7] =
+        {"DScut1", "DScut2", "DScut3", "DScut4", "DScut5", "DScut6"};
+    for (int i = 0; i < 7; i++) {
+        hName = Form("h_7Alpha_Ex_%s", cDSCut[i].Data());
+        h_7Alpha_Ex_distDSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_Excl_%s", cDSCut[i].Data());
+        h_7Alpha_Ex_Excl_distDSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_ifBe_Mult1_%s", cDSCut[i].Data());
+        h_7Alpha_Ex_ifBe_M1_distDSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_ifBe_Mult2_%s", cDSCut[i].Data());
+        h_7Alpha_Ex_ifBe_M2_distDSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C0_%s", cDSCut[i].Data());
+        h_7Alpha_Ex_if12C0_distDSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C3_%s", cDSCut[i].Data());
+        h_7Alpha_Ex_if12C3_distDSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C03_%s", cDSCut[i].Data());
+        h_7Alpha_Ex_if12C03_distDSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        for (int ie = 0; ie < 4; ie++) {
+            hName = Form("h_7Alpha_Ex_EkCut%d_%s", ie + 2, cDSCut[i].Data());
+            h_7Alpha_Ex_EkCut_DSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName =
+                Form("h_7Alpha_Ex_Excl_EkCut%d_%s", ie + 2, cDSCut[i].Data());
+            h_7Alpha_Ex_Excl_EkCut_DSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName = Form(
+                "h_7Alpha_Ex_ifBe_Mult1_EkCut%d_%s",
+                ie + 2,
+                cDSCut[i].Data());
+            h_7Alpha_Ex_ifBe_M1_EkCut_DSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName = Form(
+                "h_7Alpha_Ex_ifBe_Mult2_EkCut%d_%s",
+                ie + 2,
+                cDSCut[i].Data());
+            h_7Alpha_Ex_ifBe_M2_EkCut_DSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName =
+                Form("h_7Alpha_Ex_12C0_EkCut%d_%s", ie + 2, cDSCut[i].Data());
+            h_7Alpha_Ex_if12C0_EkCut_DSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName =
+                Form("h_7Alpha_Ex_12C3_EkCut%d_%s", ie + 2, cDSCut[i].Data());
+            h_7Alpha_Ex_if12C3_EkCut_DSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName =
+                Form("h_7Alpha_Ex_12C03_EkCut%d_%s", ie + 2, cDSCut[i].Data());
+            h_7Alpha_Ex_if12C03_EkCut_DSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+        }
+    }
+
+    //TString cRSCut[7]={"RScut05","RScut0510","RScut1015","RScut1520","RScut2025","RScutgt25"};
+    TString cRSCut[7] =
+        {"RScut1", "RScut2", "RScut3", "RScut4", "RScut5", "RScut6"};
+    for (int i = 0; i < 7; i++) {
+        hName = Form("h_7Alpha_Ex_%s", cRSCut[i].Data());
+        h_7Alpha_Ex_distRSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_Excl_%s", cRSCut[i].Data());
+        h_7Alpha_Ex_Excl_distRSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_ifBe_Mult1_%s", cRSCut[i].Data());
+        h_7Alpha_Ex_ifBe_M1_distRSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_ifBe_Mult2_%s", cRSCut[i].Data());
+        h_7Alpha_Ex_ifBe_M2_distRSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C0_%s", cRSCut[i].Data());
+        h_7Alpha_Ex_if12C0_distRSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C3_%s", cRSCut[i].Data());
+        h_7Alpha_Ex_if12C3_distRSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C03_%s", cRSCut[i].Data());
+        h_7Alpha_Ex_if12C03_distRSCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        for (int ie = 0; ie < 4; ie++) {
+            hName = Form("h_7Alpha_Ex_EkCut%d_%s", ie + 2, cRSCut[i].Data());
+            h_7Alpha_Ex_EkCut_RSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName =
+                Form("h_7Alpha_Ex_Excl_EkCut%d_%s", ie + 2, cRSCut[i].Data());
+            h_7Alpha_Ex_Excl_EkCut_RSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName = Form(
+                "h_7Alpha_Ex_ifBe_Mult1_EkCut%d_%s",
+                ie + 2,
+                cRSCut[i].Data());
+            h_7Alpha_Ex_ifBe_M1_EkCut_RSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName = Form(
+                "h_7Alpha_Ex_ifBe_Mult2_EkCut%d_%s",
+                ie + 2,
+                cRSCut[i].Data());
+            h_7Alpha_Ex_ifBe_M2_EkCut_RSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName =
+                Form("h_7Alpha_Ex_12C0_EkCut%d_%s", ie + 2, cRSCut[i].Data());
+            h_7Alpha_Ex_if12C0_EkCut_RSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName =
+                Form("h_7Alpha_Ex_12C3_EkCut%d_%s", ie + 2, cRSCut[i].Data());
+            h_7Alpha_Ex_if12C3_EkCut_RSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+
+            hName =
+                Form("h_7Alpha_Ex_12C03_EkCut%d_%s", ie + 2, cRSCut[i].Data());
+            h_7Alpha_Ex_if12C03_EkCut_RSCut[ie][i] =
+                new TH1F(hName, hName, 250, 0, 200);
+        }
+        /*
+    hName = Form("h_7Alpha_Ex_EkCut3_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_EkCut3_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_Excl_EkCut3_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_Excl_EkCut3_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_ifBe_Mult1_EkCut3_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_ifBe_M1_EkCut3_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_ifBe_Mult2_EkCut3_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_ifBe_M2_EkCut3_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_12C0_EkCut3_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_if12C0_EkCut3_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_12C3_EkCut3_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_if12C3_EkCut3_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_12C03_EkCut3_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_if12C03_EkCut3_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_EkCut4_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_EkCut4_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_Excl_EkCut4_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_Excl_EkCut4_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_ifBe_Mult1_EkCut4_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_ifBe_M1_EkCut4_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_ifBe_Mult2_EkCut4_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_ifBe_M2_EkCut4_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_12C0_EkCut4_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_if12C0_EkCut4_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_12C3_EkCut4_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_if12C3_EkCut4_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_12C03_EkCut4_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_if12C03_EkCut4_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_EkCut5_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_EkCut5_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_Excl_EkCut5_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_Excl_EkCut5_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_ifBe_Mult1_EkCut5_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_ifBe_M1_EkCut5_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_ifBe_Mult2_EkCut5_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_ifBe_M2_EkCut5_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_12C0_EkCut5_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_if12C0_EkCut5_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_12C3_EkCut5_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_if12C3_EkCut5_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+
+    hName = Form("h_7Alpha_Ex_12C03_EkCut5_%s",cRSCut[i].Data());
+    h_7Alpha_Ex_if12C03_EkCut5_RSCut[i] = new TH1F(hName, hName, 250,0,200);
+*/
+    }
+
+    TString cShapeCut[7] =
+        {"Dcut", "Scut", "Rcut", "Center", "RDcut12", "RDcutle3", "RDcutgt3"};
+    for (int i = 0; i < 7; i++) {
+        hName = Form("h_7Alpha_Ex_%s", cShapeCut[i].Data());
+        h_7Alpha_Ex_ShapeCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_Excl_%s", cShapeCut[i].Data());
+        h_7Alpha_Ex_Excl_ShapeCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_ifBe_Mult1_%s", cShapeCut[i].Data());
+        h_7Alpha_Ex_ifBe_M1_ShapeCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_ifBe_Mult2_%s", cShapeCut[i].Data());
+        h_7Alpha_Ex_ifBe_M2_ShapeCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C0_%s", cShapeCut[i].Data());
+        h_7Alpha_Ex_if12C0_ShapeCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C3_%s", cShapeCut[i].Data());
+        h_7Alpha_Ex_if12C3_ShapeCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ekcm_%s", cShapeCut[i].Data());
+        h_7Alpha_Ekcm_ShapeCut[i] = new TH1F(hName, hName, 500, 0, 50);
+    }
+
+    TString cDiskCut[5] =
+        {"DiskNoEkCut", "DiskEkCut2", "DiskEkCut3", "DiskEkCut4", "DiskEkCut5"};
+    for (int i = 0; i < 5; i++) {
+        hName = Form("h_7Alpha_Ex_%s", cDiskCut[i].Data());
+        h_7Alpha_Ex_Disk_EkCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_Excl_%s", cDiskCut[i].Data());
+        h_7Alpha_Ex_Excl_Disk_EkCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_ifBe_Mult1_%s", cDiskCut[i].Data());
+        h_7Alpha_Ex_ifBe_M1_Disk_EkCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_ifBe_Mult2_%s", cDiskCut[i].Data());
+        h_7Alpha_Ex_ifBe_M2_Disk_EkCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C0_%s", cDiskCut[i].Data());
+        h_7Alpha_Ex_if12C0_Disk_EkCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C3_%s", cDiskCut[i].Data());
+        h_7Alpha_Ex_if12C3_Disk_EkCut[i] = new TH1F(hName, hName, 250, 0, 200);
+
+        hName = Form("h_7Alpha_Ex_12C03_%s", cDiskCut[i].Data());
+        h_7Alpha_Ex_if12C03_Disk_EkCut[i] = new TH1F(hName, hName, 250, 0, 200);
+    }
+    /*
+  for(int is=0;is<5;is++){
+    for(int ic=0;ic<5;ic++){
+      hName = Form("h_7Alpha_Ex_S%dC%d",is+1,ic+1);
+      h_7Alpha_Ex_if12C3_SC25[is][ic] = new TH1F(hName, hName, 250,0,200);
+    }
+  }
+*/
+    hName = Form("h_7Alpha_Pkcm");
+    h_7Alpha_Pkcm = new TH1F(hName, hName, 600, 0, 600);
+
+    hName = Form("h_7Alpha_Pkcm_ifBe_Mult1");
+    h_7Alpha_Pkcm_ifBe_M1 = new TH1F(hName, hName, 600, 0, 600);
+
+    hName = Form("h_7Alpha_Pkcm_ifBe_Mult2");
+    h_7Alpha_Pkcm_ifBe_M2 = new TH1F(hName, hName, 600, 0, 600);
+
+    hName = Form("h_7Alpha_Pkcm_12C0");
+    h_7Alpha_Pkcm_if12C0 = new TH1F(hName, hName, 600, 0, 600);
+
+    hName = Form("h_7Alpha_Pkcm_12C3");
+    h_7Alpha_Pkcm_if12C3 = new TH1F(hName, hName, 600, 0, 600);
+
+    hName = Form("h_7Alpha_Ekcm");
+    h_7Alpha_Ekcm = new TH1F(hName, hName, 500, 0, 50);
+
+    hName = Form("h_7Alpha_Ekcm_ifBe_Mult1");
+    h_7Alpha_Ekcm_ifBe_M1 = new TH1F(hName, hName, 500, 0, 50);
+
+    hName = Form("h_7Alpha_Ekcm_ifBe_Mult2");
+    h_7Alpha_Ekcm_ifBe_M2 = new TH1F(hName, hName, 500, 0, 50);
+
+    hName = Form("h_7Alpha_Ekcm_12C0");
+    h_7Alpha_Ekcm_if12C0 = new TH1F(hName, hName, 500, 0, 50);
+
+    hName = Form("h_7Alpha_Ekcm_12C3");
+    h_7Alpha_Ekcm_if12C3 = new TH1F(hName, hName, 500, 0, 50);
+
+    hName = Form("h_7Alpha_Ekcm_4Alpha_wo12C0");
+    h_7Alpha_Ekcm_4Alpha_wo12C0 = new TH1F(hName, hName, 500, 0, 50);
+
+    hName = Form("h_7Alpha_Ekcm_4Alpha_wo12C3");
+    h_7Alpha_Ekcm_4Alpha_wo12C3 = new TH1F(hName, hName, 500, 0, 50);
+
+    hName = Form("h_7Alpha_2eRel");
+    h_7Alpha_2eRel = new TH1F(hName, hName, 1000, 0, 200);
+
+    hName = Form("h_7Alpha_2eRel_ifBe_Mult1");
+    h_7Alpha_2eRel_ifBe_M1 = new TH1F(hName, hName, 1000, 0, 200);
+
+    hName = Form("h_7Alpha_2eRel_ifBe_Mult2");
+    h_7Alpha_2eRel_ifBe_M2 = new TH1F(hName, hName, 1000, 0, 200);
+
+    hName = Form("h_7Alpha_2eRel_12C0");
+    h_7Alpha_2eRel_if12C0 = new TH1F(hName, hName, 1000, 0, 200);
+
+    hName = Form("h_7Alpha_2eRel_12C3");
+    h_7Alpha_2eRel_if12C3 = new TH1F(hName, hName, 1000, 0, 200);
+
+    hName = Form("h_7Alpha_2eRel_4Alpha_wo12C0");
+    h_7Alpha_2eRel_4Alpha_wo12C0 = new TH1F(hName, hName, 1000, 0, 200);
+
+    hName = Form("h_7Alpha_2eRel_4Alpha_wo12C3");
+    h_7Alpha_2eRel_4Alpha_wo12C3 = new TH1F(hName, hName, 1000, 0, 200);
+
+    hName = Form("h_7Alpha_Ekcm_2eRel");
+    h_7Alpha_Ekcm_2eRel = new TH2F(hName, hName, 200, 0, 40, 200, 0, 40);
+
+    hName = Form("h_7Alpha_Ekcm_2eRel_ifBe_Mult1");
+    h_7Alpha_Ekcm_2eRel_ifBe_M1 =
+        new TH2F(hName, hName, 200, 0, 40, 200, 0, 40);
+
+    hName = Form("h_7Alpha_Ekcm_2eRel_ifBe_Mult2");
+    h_7Alpha_Ekcm_2eRel_ifBe_M2 =
+        new TH2F(hName, hName, 200, 0, 40, 200, 0, 40);
+
+    hName = Form("h_7Alpha_Ekcm_2eRel_12C0");
+    h_7Alpha_Ekcm_2eRel_if12C0 = new TH2F(hName, hName, 200, 0, 40, 200, 0, 40);
+
+    hName = Form("h_7Alpha_Ekcm_2eRel_12C3");
+    h_7Alpha_Ekcm_2eRel_if12C3 = new TH2F(hName, hName, 200, 0, 40, 200, 0, 40);
+
+    hName = Form("h_7Alpha_Ekcm_2eRel_4Alpha_wo12C0");
+    h_7Alpha_Ekcm_2eRel_4Alpha_wo12C0 =
+        new TH2F(hName, hName, 200, 0, 40, 200, 0, 40);
+
+    hName = Form("h_7Alpha_Ekcm_2eRel_4Alpha_wo12C3");
+    h_7Alpha_Ekcm_2eRel_4Alpha_wo12C3 =
+        new TH2F(hName, hName, 200, 0, 40, 200, 0, 40);
+
+    hName = Form("h_7Alpha_3eRel");
+    h_7Alpha_3eRel = new TH1F(hName, hName, 500, 0, 10);
+
+    hName = Form("h_7Alpha_3eRel_ifBe_Mult1");
+    h_7Alpha_3eRel_ifBe_M1 = new TH1F(hName, hName, 500, 0, 10);
+
+    hName = Form("h_7Alpha_3eRel_ifBe_Mult2");
+    h_7Alpha_3eRel_ifBe_M2 = new TH1F(hName, hName, 500, 0, 10);
+
+    hName = Form("h_7Alpha_Type");
+    h_7Alpha_Type = new TH1F(hName, hName, 15, 0.5, 15.5);
+
+    hName = Form("h_7Alpha_Type_Ex");
+    h_7Alpha_Type_Ex = new TH2F(hName, hName, 15, 0.5, 15.5, 1000, 0, 200);
+
+    hName = Form("h_7Alpha_4eRel");
+    h_7Alpha_4eRel = new TH1F(hName, hName, 1000, 0, 20);
+
+    hName = Form("h_7Alpha_4eRel_ifBe");
+    h_7Alpha_4eRel_ifBe = new TH1F(hName, hName, 1000, 0, 20);
+
+    hName = Form("h_7Alpha_4eRel_12C0");
+    h_7Alpha_4eRel_12C0 = new TH1F(hName, hName, 1000, 0, 20);
+
+    hName = Form("h_7Alpha_4eRel_12C3");
+    h_7Alpha_4eRel_12C3 = new TH1F(hName, hName, 1000, 0, 20);
+
+    hName = Form("h_7Alpha_4eRel_BeBe");
+    h_7Alpha_4eRel_BeBe = new TH1F(hName, hName, 1000, 0, 20);
+
+    hName = Form("h7Alpha_Shape");
+    h_7Alpha_Shape = new TH2F(hName, hName, 100, 0, 1, 100, 0, .5);
+
+    for (int iex = 0; iex < 10; iex++) {
+        hName = Form("h7Alpha_Shape_Ex%d", iex + 6);
+        h_7Alpha_Shape_nEx[iex] = new TH2F(hName, hName, 100, 0, 1, 100, 0, .5);
+
+        hName = Form("h_7Alpha_Shape_ifBe_Mult1_Ex%d", iex + 6);
+        h_7Alpha_Shape_ifBe_M1_nEx[iex] =
+            new TH2F(hName, hName, 100, 0, 1, 100, 0, .5);
+
+        hName = Form("h_7Alpha_Shape_ifBe_Mult2_Ex%d", iex + 6);
+        h_7Alpha_Shape_ifBe_M2_nEx[iex] =
+            new TH2F(hName, hName, 100, 0, 1, 100, 0, .5);
+
+        hName = Form("h_7Alpha_Shape_12C0_Ex%d", iex + 6);
+        h_7Alpha_Shape_if12C0_nEx[iex] =
+            new TH2F(hName, hName, 100, 0, 1, 100, 0, .5);
+
+        hName = Form("h_7Alpha_Shape_12C3_Ex%d", iex + 6);
+        h_7Alpha_Shape_if12C3_nEx[iex] =
+            new TH2F(hName, hName, 100, 0, 1, 100, 0, .5);
+
+        hName = Form("h_7Alpha_Ekcm_Ex%d", iex + 6);
+        h_7Alpha_Ekcm_nEx[iex] = new TH1F(hName, hName, 500, 0, 50);
+
+        hName = Form("h_7Alpha_Ekcm_ifBe_Mult1_Ex%d", iex + 6);
+        h_7Alpha_Ekcm_ifBe_M1_nEx[iex] = new TH1F(hName, hName, 500, 0, 50);
+
+        hName = Form("h_7Alpha_Ekcm_ifBe_Mult2_Ex%d", iex + 6);
+        h_7Alpha_Ekcm_ifBe_M2_nEx[iex] = new TH1F(hName, hName, 500, 0, 50);
+
+        hName = Form("h_7Alpha_Ekcm_12C0_Ex%d", iex + 6);
+        h_7Alpha_Ekcm_if12C0_nEx[iex] = new TH1F(hName, hName, 500, 0, 50);
+
+        hName = Form("h_7Alpha_Ekcm_12C3_Ex%d", iex + 6);
+        h_7Alpha_Ekcm_if12C3_nEx[iex] = new TH1F(hName, hName, 500, 0, 50);
+    }
+
+    hName = Form("h7Alpha_Shape_ifBe_Mult1");
+    h_7Alpha_Shape_ifBe_M1 = new TH2F(hName, hName, 50, 0, 1, 50, 0, .5);
+
+    hName = Form("h7Alpha_Shape_ifBe_Mult2");
+    h_7Alpha_Shape_ifBe_M2 = new TH2F(hName, hName, 50, 0, 1, 50, 0, .5);
+
+    hName = Form("h7Alpha_Shape_if12C0");
+    h_7Alpha_Shape_if12C0 = new TH2F(hName, hName, 50, 0, 1, 50, 0, .5);
+
+    hName = Form("h7Alpha_Shape_if12C3");
+    h_7Alpha_Shape_if12C3 = new TH2F(hName, hName, 50, 0, 1, 50, 0, .5);
+
+    hName = Form("h7Alpha_Shape_4Alpha_wo12C0");
+    h_7Alpha_Shape_4Alpha_wo12C0 = new TH2F(hName, hName, 50, 0, 1, 50, 0, .5);
+
+    hName = Form("h7Alpha_Shape_4Alpha_wo12C3");
+    h_7Alpha_Shape_4Alpha_wo12C3 = new TH2F(hName, hName, 50, 0, 1, 50, 0, .5);
+
+    hName = Form("h7Alpha_ShapeT");
+    h_7Alpha_ShapeT = new TH2F(hName, hName, 100, 0, 1, 100, 0, .5);
+
+    hName = Form("h7Alpha_ShapeT_ifBe_Mult1");
+    h_7Alpha_ShapeT_ifBe_M1 = new TH2F(hName, hName, 50, 0, 1, 50, 0, .5);
+
+    hName = Form("h7Alpha_ShapeT_ifBe_Mult2");
+    h_7Alpha_ShapeT_ifBe_M2 = new TH2F(hName, hName, 50, 0, 1, 50, 0, .5);
+
+    hName = Form("h7Alpha_ShapeT_if12C0");
+    h_7Alpha_ShapeT_if12C0 = new TH2F(hName, hName, 50, 0, 1, 50, 0, .5);
+
+    hName = Form("h7Alpha_ShapeT_if12C3");
+    h_7Alpha_ShapeT_if12C3 = new TH2F(hName, hName, 50, 0, 1, 50, 0, .5);
+
+    hName = Form("h7Alpha_ShapeT_4Alpha_wo12C0");
+    h_7Alpha_ShapeT_4Alpha_wo12C0 = new TH2F(hName, hName, 50, 0, 1, 50, 0, .5);
+
+    hName = Form("h7Alpha_ShapeT_4Alpha_wo12C3");
+    h_7Alpha_ShapeT_4Alpha_wo12C3 = new TH2F(hName, hName, 50, 0, 1, 50, 0, .5);
+
+    hName = Form("h_7Alpha_dpp");
+    h_7Alpha_dpp = new TH1F(hName, hName, 600, 0, 600);
+
+    hName = Form("h_7Alpha_dpx");
+    h_7Alpha_dpx = new TH1F(hName, hName, 600, 0, 600);
+
+    hName = Form("h_7Alpha_dpy");
+    h_7Alpha_dpy = new TH1F(hName, hName, 600, 0, 600);
+
+    hName = Form("h_7Alpha_dpz");
+    h_7Alpha_dpz = new TH1F(hName, hName, 600, 0, 600);
+
+    savdir->cd();
+
+    printf("ReadPhysEvent_roy::out of defining histograms\n");
+}
+
+//_______________________________________________________________________
+
+void ReadPhysEvent_roy::Begin() {
+    SetState(kBegin);
+    fObjectManager->Begin();
+}
+//_______________________________________________________________________
+
+void ReadPhysEvent_roy::End() {
+    //End of job
+    SetState(kEnd);
+}
+//_______________________________________________________________________
+
+void ReadPhysEvent_roy::Finish() {
+    SetState(kFinish);
+}
+
+//_________________________________________________________________
+
+void ReadPhysEvent_roy::Clear(Option_t* opt) {}
+//_______________________________________________________________________
+//_________________________________________________________________
+
+void ReadPhysEvent_roy::Event(CycEvent* evin, CycEvent* evout) {
+    fTensor->Clear();
+    //fTensorT->Clear();
+    PhysEvent* ev = (PhysEvent*)evin;
+    Int_t ZMult[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    Double_t ThetaA28[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    Double_t PhiA28[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    Double_t EnergyA28[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    Double_t A28[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    Double_t Z28[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    Double_t xpos[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    Double_t ypos[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+    Double_t ThetaZ2[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    Double_t PhiZ2[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    Double_t ThetaZ2C[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    Double_t PhiZ2C[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    Double_t EnergyZ2[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    Int_t AA28Mult = 0;
+    Int_t AA28Type = 0;
+    Int_t Z2Mult = 0;
+    Int_t ii = 1;
+    Int_t kk = 1;
+    Int_t Alphaii = 1;
+    Int_t AlphaMult = 0;
+    Double_t ERelSmall = 1000.0;
+    Double_t KE7Alpha[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    Double_t StdDev = 0;
+    Int_t ZTot = 0;
+
+    for (Int_t ipart = 0; ipart < ev->GetMultLcp(); ipart++) {
+        PhysParticle* part1 = ev->GetParticleAt(ipart);
+        Int_t ZZ1 = part1->GetZ();
+        Int_t AA1 = part1->GetA();
+        ZTot += ZZ1;
+
+        // cout <<"ZZ: " << ZZ1 << endl;
+        // cout <<"AA: " << AA1 << endl;
+        if (AA1 == 2 * ZZ1) {
+            ZMult[ZZ1] = ZMult[ZZ1] + 1;
+        }
+        if (ZZ1 == 2 && AA1 == 4) {
+            AlphaMult++;
+        }
+    }
+    //printf("AlphaMult =%d\n",AlphaMult);
+
+    // cout << "ZMult 1: " << ZMult[1] << endl;
+    // cout << "ZMult 2: " << ZMult[2] << endl;
+    // cout << "ZMult 3: " << ZMult[3] << endl;
+    // cout << "ZMult 6: " << ZMult[6] << endl;
+    Bool_t EventHasParticle = kFALSE;
+    for (Int_t ipart = 0; ipart < ev->GetMultLcp(); ipart++) {
+        PhysParticle* part = ev->GetParticleAt(ipart);
+        Double_t EE = part->GetEnergy();
+        Int_t ZZ = part->GetZ();
+        Int_t AA = part->GetA();
+        Bool_t IsSat = part->GetIsSaturated();
+        Bool_t IsNoise = part->GetIsNoise();
+        Double_t xposp = part->GetLocalX();
+        Double_t yposp = part->GetLocalY();
+        if (ZZ >= 1) {
+            EventHasParticle = kTRUE;
+        }
+
+        Int_t idet = part->GetIDet();
+        DadlSiPositionCalibrator* PosCalibrator =
+            fObjectManager->GetDadlSiPositionCalibrator(idet);
+        double Theta, Phi, pc, px, py, pz;
+        double KEx, KEy, KEz, gamma, beta, betaX, betaY, betaZ, Vt;
+        double Splatx, Splaty;
+        Theta = part->GetTheta();
+        Phi = part->GetPhi();
+        pc = TMath::Sqrt(EE * EE + 2 * EE * AA * 931.5);
+        px = pc * TMath::Sin(Theta * TMath::DegToRad())
+            * TMath::Cos(Phi * TMath::DegToRad());
+        py = pc * TMath::Sin(Theta * TMath::DegToRad())
+            * TMath::Sin(Phi * TMath::DegToRad());
+        pz = pc * TMath::Cos(Theta * TMath::DegToRad());
+
+        KEx = -931.5 * AA
+            + TMath::Sqrt(TMath::Power(931.5 * AA, 2) + TMath::Power(px, 2));
+        KEy = -931.5 * AA
+            + TMath::Sqrt(TMath::Power(931.5 * AA, 2) + TMath::Power(py, 2));
+        KEz = -931.5 * AA
+            + TMath::Sqrt(TMath::Power(931.5 * AA, 2) + TMath::Power(pz, 2));
+        gamma = 1 + ((EE / AA) / 931.5);
+        beta = TMath::Sqrt(1. - (1. / (gamma * gamma)));
+        // cout <<"KEx: " << KEx << endl;
+        // cout <<"beta: " << beta << endl;
+        betaX = beta * TMath::Sin(Theta * TMath::DegToRad())
+            * TMath::Cos(Phi * TMath::DegToRad());
+        betaY = beta * TMath::Sin(Theta * TMath::DegToRad())
+            * TMath::Sin(Phi * TMath::DegToRad());
+        betaZ = beta * TMath::Cos(Theta * TMath::DegToRad());
+        Vt = sqrt(betaX * betaX + betaY * betaY) * 29.9792;  //cm/ns
+
+        // cout <<"betaX: " << betaX << " Vt: " << Vt << endl;
+        Bool_t xgood = part->GetIsXPosGood();
+        Bool_t ygood = part->GetIsYPosGood();
+        Splatx = Theta * cos(Phi * 3.14159 / 180.);
+        Splaty = Theta * sin(Phi * 3.14159 / 180.);
+
+        if (ZZ == 2 && AA == 4) {
+            ThetaZ2[Alphaii] = Theta;
+            PhiZ2[Alphaii] = Phi;
+            EnergyZ2[Alphaii] = EE;
+            ThetaZ2C[Alphaii] = PosCalibrator->GetThetaCent(idet);
+            PhiZ2C[Alphaii] = PosCalibrator->GetPhiCent(idet);
+            xpos[Alphaii] = xposp;
+            ypos[Alphaii] = yposp;
+            Alphaii++;
+        }
+
+        if (xgood && ygood) {
+            if (betaX <= 0)
+                Vt = -Vt;
+        }
+
+        if (ZMult[2] == 7 && ZZ == 2 && AA == 4) {
+            AA28Type = 1;
+            AA28Mult = 7;
+            EnergyA28[ii] = EE;
+            PhiA28[ii] = Phi;
+            ThetaA28[ii] = Theta;
+            A28[ii] = AA;
+            Z28[ii] = ZZ;
+            ii++;
+        }
+
+        if (ZMult[2] >= 4 && ZMult[2] != 7 && ZZ == 2 && AA == 4) {
+            AA28Type = 2;
+            AA28Mult = ZMult[2];
+            EnergyA28[ii] = EE;
+            PhiA28[ii] = Phi;
+            ThetaA28[ii] = Theta;
+            A28[ii] = AA;
+            Z28[ii] = ZZ;
+            ii++;
+        }
+    }
+
+    TVector3 vv1, vv2, vv3, vv4, vv1c, vv2c, vv3c, vv4c, vRel, vcm, vRelc, vcmc;
+    Double_t eRel = 0;
+    Double_t eRelc = 0;
+    Float_t EneInCmFrame = 0;
+    Float_t EneInCmFramec = 0;
+    Float_t vel = 0;
+    Float_t velc = 0;
+    Bool_t HasBe = kFALSE;
+    Int_t Be1[8];
+    Int_t Be2[8];
+    Int_t NumBe = 0;
+    Int_t RawNumBe = 0;
+    int C12_0[3], C12_3[3];
+    Bool_t IncrementNum = kTRUE;
+    Double_t BeERel[8][8];
+    Double_t Splatx1, Splatx2, Splaty1, Splaty2, Splatx3, Splaty3;
+    Int_t Alpha7Type = 0;
+    //1 = no 8Be/12C
+    //2 = 1 8Be G.S.
+    //3 = 1 12C 0+ hoyle
+    //4 = 1 12C 3-
+    //5 = 2 8Be G.S.
+    //6 = 1 8Be G.S. + 1 12C 0+ hoyle
+    //7 = 1 8Be G.S. + 1 12C 3-
+    //8 = 1 12C 0+ hoyle + 1 12C 0+ hoyle
+    //9 = 1 12C 0+ hoyle + 1 12C 3-
+    //10 = 1 12C 3- + 1 12C 3-
+    //11 = 3 8Be G.S.
+    //12 = 2 8Be G.S. + 0+
+    //13 = 2 8Be G.S. + 3-
+    //14 not identified
+
+    Int_t Be1Type = 0;
+    Int_t Be2Type = 0;
+    Int_t Be3Type = 0;
+    //1 = 8Be G.S.
+    //2 = 0+ hoyle
+    //3 = 12C 3-
+    if (ZTot <= 20) {
+        //alpha alpha correlation and BeMult / hasBe in alphamult>2 events
+        if (AA28Type == 1 || AA28Type == 2) {
+            for (Int_t ii = 1; ii <= AA28Mult; ii++) {
+                for (Int_t jj = ii + 1; jj <= AA28Mult; jj++) {
+                    eRel = 0;
+                    vv1.SetMagThetaPhi(
+                        sqrt(2 * EnergyA28[ii] / 931.5 / A28[ii]),
+                        ThetaA28[ii] * 3.14159 / 180.,
+                        PhiA28[ii] * 3.14159 / 180.);  // units of c
+                    vv2.SetMagThetaPhi(
+                        sqrt(2 * EnergyA28[jj] / 931.5 / A28[jj]),
+                        ThetaA28[jj] * 3.14159 / 180.,
+                        PhiA28[jj] * 3.14159 / 180.);  // units of c
+                    vRel = vv1 - vv2;
+                    eRel = 931.5 * vRel.Mag2();
+                    //h_7Alpha_aa_ERel->Fill(eRel);
+                    BeERel[ii][jj] = eRel;
+                    if (eRel < ERelSmall) {
+                        ERelSmall = eRel;
+                    }
+                    if (eRel <= 0.25) {
+                        RawNumBe++;
+                        if (NumBe > 0) {
+                            for (Int_t k = 1; k <= NumBe; k++) {
+                                if (Be1[k] == ii || Be1[k] == jj || Be2[k] == ii
+                                    || Be2[k] == jj) {
+                                    // cout <<"SECOND BE WITH II: " << ii<< " and jj: " << jj << " ~~~~~~~~~~~~~~~~~~~~~~~~~" << endl;
+                                    IncrementNum = kFALSE;
+
+                                    break;
+                                }
+                            }
+                            if (IncrementNum) {
+                                NumBe++;
+                                HasBe = kTRUE;
+
+                                Be1[NumBe] = ii;
+                                Be2[NumBe] = jj;
+                            }
+                        }
+                        if (NumBe == 0) {
+                            //  cout <<"Have Be with ii: " << ii << " and jj: " << jj << endl;
+                            NumBe++;
+                            HasBe = kTRUE;
+
+                            Be1[NumBe] = ii;
+                            Be2[NumBe] = jj;
+                        }
+                    }
+                }
+            }
+        }
+        // if(HasBe)
+        // {
+        //   cout <<"numBe: " << NumBe << endl;
+        // }
+        Double_t Rels[3] = {0, 0, 0};
+        Int_t Alpha4Type = 0;
+        //1 = 12C 0+
+        //2 = 12C 3-
+        //3 = 8Be 8Be
+        Bool_t TypeIdentified = kFALSE;
+        Int_t mm = 0;
+        //alpha alpha alpha correlation 7 alpha events //if have Be, check 3 alpha eRel for 12C states to reduce background
+        //crw   below routine somehow causes crush at certain event
+        /*
+    if (AA28Type == 1 )
+    {
+      for (Int_t ii = 1; ii <= AA28Mult; ii++)    // AA28Type=1 has always AA28Mult=7
+      {
+        for (Int_t jj = ii + 1; jj <= AA28Mult; jj++)
+        {
+          for (Int_t ll = jj + 1; ll <= AA28Mult; ll++)
+         {
+          // crw h_7Alpha_3eRel
+       	    vv1.SetMagThetaPhi(sqrt(2 * EnergyA28[ii] / 931.5 / A28[ii]), ThetaA28[ii] * 3.14159 / 180., PhiA28[ii] * 3.14159 / 180.); // units of c
+            vv2.SetMagThetaPhi(sqrt(2 * EnergyA28[jj] / 931.5 / A28[jj]), ThetaA28[jj] * 3.14159 / 180., PhiA28[jj] * 3.14159 / 180.); // units of c
+            vv3.SetMagThetaPhi(sqrt(2 * EnergyA28[ll] / 931.5 / A28[ll]), ThetaA28[ll] * 3.14159 / 180., PhiA28[ll] * 3.14159 / 180.); // units of c
+            vcm.SetMagThetaPhi(0, 0, 0);
+            vcm = vcm + (1. / 3.) * vv1;
+            vcm = vcm + (1. / 3.) * vv2;
+            vcm = vcm + (1. / 3.) * vv3;
+            vel = (vcm - vv1).Mag();
+            EneInCmFrame = 0;
+            EneInCmFrame += 0.5 * vel * vel * 3727.38; // MeV
+            vel = (vcm - vv2).Mag();
+            EneInCmFrame += 0.5 * vel * vel * 3727.38; // MeV
+            vel = (vcm - vv3).Mag();
+            EneInCmFrame += 0.5 * vel * vel * 3727.38; // MeV
+            h_7Alpha_3eRel->Fill(EneInCmFrame);
+
+	    for (Int_t mm = 1; mm <= AA28Mult; mm++)
+            {
+              vv1.SetMagThetaPhi(sqrt(2 * EnergyA28[ii] / 931.5 / A28[ii]), ThetaA28[ii] * 3.14159 / 180., PhiA28[ii] * 3.14159 / 180.); // units of c
+              vv2.SetMagThetaPhi(sqrt(2 * EnergyA28[jj] / 931.5 / A28[jj]), ThetaA28[jj] * 3.14159 / 180., PhiA28[jj] * 3.14159 / 180.); // units of c
+              vv3.SetMagThetaPhi(sqrt(2 * EnergyA28[ll] / 931.5 / A28[ll]), ThetaA28[ll] * 3.14159 / 180., PhiA28[ll] * 3.14159 / 180.); // units of c
+              vv4.SetMagThetaPhi(sqrt(2 * EnergyA28[mm] / 931.5 / A28[mm]), ThetaA28[mm] * 3.14159 / 180., PhiA28[mm] * 3.14159 / 180.); // units of c
+              vcm.SetMagThetaPhi(0, 0, 0);
+              vcm = vcm + (1. / 4.) * vv1;
+              vcm = vcm + (1. / 4.) * vv2;
+              vcm = vcm + (1. / 4.) * vv3;
+              vcm = vcm + (1. / 4.) * vv4;
+              vel = (vcm - vv1).Mag();
+              EneInCmFrame = 0;
+              EneInCmFrame += 0.5 * vel * vel * 3727.38; // MeV
+              vel = (vcm - vv2).Mag();
+              EneInCmFrame += 0.5 * vel * vel * 3727.38; // MeV
+              vel = (vcm - vv3).Mag();
+              EneInCmFrame += 0.5 * vel * vel * 3727.38; // MeV
+              vel = (vcm - vv4).Mag();
+              EneInCmFrame += 0.5 * vel * vel * 3727.38; // MeV
+              h_7Alpha_4eRel->Fill(EneInCmFrame);
+	    }
+
+	  }
+	}
+      }
+    }*/
+        //crw end
+        //if ((AA28Type == 1 || AA28Type == 2) && HasBe)
+        if (AA28Type == 1 && HasBe) {
+            for (Int_t ii = 1; ii <= AA28Mult;
+                 ii++)  // AA28Type=1 has always AA28Mult=7
+            {
+                for (Int_t jj = ii + 1; jj <= AA28Mult; jj++) {
+                    for (Int_t ll = jj + 1; ll <= AA28Mult; ll++) {
+                        for (Int_t k = 1; k <= NumBe; k++) {
+                            if ((Be1[k] == ii || Be1[k] == jj || Be1[k] == ll)
+                                && (Be2[k] == ii || Be2[k] == jj
+                                    || Be2[k] == ll)) {
+                                vv1.SetMagThetaPhi(
+                                    sqrt(2 * EnergyA28[ii] / 931.5 / A28[ii]),
+                                    ThetaA28[ii] * 3.14159 / 180.,
+                                    PhiA28[ii] * 3.14159 / 180.);  // units of c
+                                vv2.SetMagThetaPhi(
+                                    sqrt(2 * EnergyA28[jj] / 931.5 / A28[jj]),
+                                    ThetaA28[jj] * 3.14159 / 180.,
+                                    PhiA28[jj] * 3.14159 / 180.);  // units of c
+                                vv3.SetMagThetaPhi(
+                                    sqrt(2 * EnergyA28[ll] / 931.5 / A28[ll]),
+                                    ThetaA28[ll] * 3.14159 / 180.,
+                                    PhiA28[ll] * 3.14159 / 180.);  // units of c
+                                vcm.SetMagThetaPhi(0, 0, 0);
+                                vcm = vcm + (1. / 3.) * vv1;
+                                vcm = vcm + (1. / 3.) * vv2;
+                                vcm = vcm + (1. / 3.) * vv3;
+                                vel = (vcm - vv1).Mag();
+                                EneInCmFrame = 0;
+                                EneInCmFrame +=
+                                    0.5 * vel * vel * 3727.38;  // MeV
+                                vel = (vcm - vv2).Mag();
+                                EneInCmFrame +=
+                                    0.5 * vel * vel * 3727.38;  // MeV
+                                vel = (vcm - vv3).Mag();
+                                EneInCmFrame +=
+                                    0.5 * vel * vel * 3727.38;  // MeV
+                                if (NumBe
+                                    == 1)  // here we can gate to distinguish between 7alphatype 2,3,4
+                                {
+                                    if (AA28Type == 1) {
+                                        h_7Alpha_3eRel_ifBe_M1->Fill(
+                                            EneInCmFrame);
+                                        if (EneInCmFrame <= 0.62) {
+                                            Alpha7Type = 3;
+                                            C12_0[0] = ii;
+                                            C12_0[1] = jj;
+                                            C12_0[2] = ll;
+                                            //printf("Alpha7Type =%d\n",Alpha7Type);
+                                            //printf("BeID: %d %d\n",Be1[1],Be2[1]);
+                                            //printf("C12ID: %d %d %d\n",ii,jj,ll);
+                                            TypeIdentified = kTRUE;
+                                            Alpha4Type = 1;
+                                        }
+                                        if (EneInCmFrame >= 2.1
+                                            && EneInCmFrame <= 3.0) {
+                                            Alpha7Type = 4;
+                                            C12_3[0] = ii;
+                                            C12_3[1] = jj;
+                                            C12_3[2] = ll;
+                                            //printf("Alpha7Type =%d\n",Alpha7Type);
+                                            //printf("BeID: %d %d\n",Be1[1],Be2[1]);
+                                            //printf("C12ID: %d %d %d\n",ii,jj,ll);
+                                            TypeIdentified = kTRUE;
+                                            Alpha4Type = 2;
+                                        }
+                                    }
+                                }
+                                if (NumBe >= 2) {
+                                    if (AA28Type == 1) {
+                                        h_7Alpha_3eRel_ifBe_M2->Fill(
+                                            EneInCmFrame);
+                                    }
+                                    if (k == 1) {
+                                        if (EneInCmFrame <= 0.62) {
+                                            Be1Type = 1;
+                                            Alpha4Type = 1;
+                                        }
+                                        if (EneInCmFrame >= 2.1
+                                            && EneInCmFrame <= 3.0) {
+                                            Be1Type = 2;
+                                            Alpha4Type = 2;
+                                        }
+                                    }
+                                    if (k == 2) {
+                                        if (EneInCmFrame <= 0.62) {
+                                            Be2Type = 1;
+                                            Alpha4Type = 1;
+                                        }
+                                        if (EneInCmFrame >= 2.1
+                                            && EneInCmFrame <= 3.0) {
+                                            Be2Type = 2;
+                                            Alpha4Type = 2;
+                                        }
+                                    }
+                                    if (k == 3) {
+                                        if (EneInCmFrame <= 0.62) {
+                                            Be3Type = 1;
+                                            Alpha4Type = 1;
+                                        }
+                                        if (EneInCmFrame >= 2.1
+                                            && EneInCmFrame <= 3.0) {
+                                            Be3Type = 2;
+                                            Alpha4Type = 2;
+                                        }
+                                    }
+                                    if (NumBe >= 2 && Alpha4Type == 0) {
+                                        Alpha4Type = 3;
+                                    }
+                                }
+
+                                //calculate 4alpha erel only with 8Be's and 12C's, fill accordingly
+                                if (Alpha4Type >= 1) {
+                                    //this is for 12C comparisons
+                                    if (NumBe == 1) {
+                                        for (Int_t mm = 1; mm <= AA28Mult;
+                                             mm++) {
+                                            if (ii != mm && jj != mm
+                                                && ll != mm) {
+                                                vv1.SetMagThetaPhi(
+                                                    sqrt(
+                                                        2 * EnergyA28[ii]
+                                                        / 931.5 / A28[ii]),
+                                                    ThetaA28[ii] * 3.14159
+                                                        / 180.,
+                                                    PhiA28[ii] * 3.14159
+                                                        / 180.);  // units of c
+                                                vv2.SetMagThetaPhi(
+                                                    sqrt(
+                                                        2 * EnergyA28[jj]
+                                                        / 931.5 / A28[jj]),
+                                                    ThetaA28[jj] * 3.14159
+                                                        / 180.,
+                                                    PhiA28[jj] * 3.14159
+                                                        / 180.);  // units of c
+                                                vv3.SetMagThetaPhi(
+                                                    sqrt(
+                                                        2 * EnergyA28[ll]
+                                                        / 931.5 / A28[ll]),
+                                                    ThetaA28[ll] * 3.14159
+                                                        / 180.,
+                                                    PhiA28[ll] * 3.14159
+                                                        / 180.);  // units of c
+                                                vv4.SetMagThetaPhi(
+                                                    sqrt(
+                                                        2 * EnergyA28[mm]
+                                                        / 931.5 / A28[mm]),
+                                                    ThetaA28[mm] * 3.14159
+                                                        / 180.,
+                                                    PhiA28[mm] * 3.14159
+                                                        / 180.);  // units of c
+
+                                                vcm.SetMagThetaPhi(0, 0, 0);
+                                                vcm = vcm + (1. / 4.) * vv1;
+                                                vcm = vcm + (1. / 4.) * vv2;
+                                                vcm = vcm + (1. / 4.) * vv3;
+                                                vcm = vcm + (1. / 4.) * vv4;
+                                                vel = (vcm - vv1).Mag();
+                                                EneInCmFrame = 0;
+                                                EneInCmFrame += 0.5 * vel * vel
+                                                    * 3727.38;  // MeV
+                                                vel = (vcm - vv2).Mag();
+                                                EneInCmFrame += 0.5 * vel * vel
+                                                    * 3727.38;  // MeV
+                                                vel = (vcm - vv3).Mag();
+                                                EneInCmFrame += 0.5 * vel * vel
+                                                    * 3727.38;  // MeV
+                                                vel = (vcm - vv4).Mag();
+                                                EneInCmFrame += 0.5 * vel * vel
+                                                    * 3727.38;  // MeV
+                                                if (Alpha4Type == 1) {
+                                                    h_7Alpha_4eRel_12C0->Fill(
+                                                        EneInCmFrame);
+                                                    h_7Alpha_4eRel_ifBe->Fill(
+                                                        EneInCmFrame);
+                                                }
+                                                if (Alpha4Type == 2) {
+                                                    h_7Alpha_4eRel_12C3->Fill(
+                                                        EneInCmFrame);
+                                                    h_7Alpha_4eRel_ifBe->Fill(
+                                                        EneInCmFrame);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        //8Be 8Be if mult is 2, only 1 way
+        Int_t jj = 0;
+        Int_t ll = 0;
+        if (NumBe >= 2 && AA28Type == 2 && HasBe && Alpha4Type == 3) {
+            for (Int_t tt = 1; tt <= NumBe; tt++) {
+                for (Int_t ff = tt + 1; ff <= NumBe; ff++) {
+                    ii = Be1[tt];
+                    jj = Be2[tt];
+                    ll = Be1[ff];
+                    mm = Be2[ff];
+                    vv1.SetMagThetaPhi(
+                        sqrt(2 * EnergyA28[ii] / 931.5 / A28[ii]),
+                        ThetaA28[ii] * 3.14159 / 180.,
+                        PhiA28[ii] * 3.14159 / 180.);  // units of c
+                    vv2.SetMagThetaPhi(
+                        sqrt(2 * EnergyA28[jj] / 931.5 / A28[ii]),
+                        ThetaA28[jj] * 3.14159 / 180.,
+                        PhiA28[jj] * 3.14159 / 180.);  // units of c
+                    vv3.SetMagThetaPhi(
+                        sqrt(2 * EnergyA28[ll] / 931.5 / A28[ii]),
+                        ThetaA28[ll] * 3.14159 / 180.,
+                        PhiA28[ll] * 3.14159 / 180.);  // units of c
+                    vv4.SetMagThetaPhi(
+                        sqrt(2 * EnergyA28[mm] / 931.5 / A28[mm]),
+                        ThetaA28[mm] * 3.14159 / 180.,
+                        PhiA28[mm] * 3.14159 / 180.);  // units of c
+
+                    vcm.SetMagThetaPhi(0, 0, 0);
+                    vcm = vcm + (1. / 4.) * vv1;
+                    vcm = vcm + (1. / 4.) * vv2;
+                    vcm = vcm + (1. / 4.) * vv3;
+                    vcm = vcm + (1. / 4.) * vv4;
+                    vel = (vcm - vv1).Mag();
+                    EneInCmFrame = 0;
+                    EneInCmFrame += 0.5 * vel * vel * 3727.38;  // MeV
+                    vel = (vcm - vv2).Mag();
+                    EneInCmFrame += 0.5 * vel * vel * 3727.38;  // MeV
+                    vel = (vcm - vv3).Mag();
+                    EneInCmFrame += 0.5 * vel * vel * 3727.38;  // MeV
+                    vel = (vcm - vv4).Mag();
+                    EneInCmFrame += 0.5 * vel * vel * 3727.38;  // MeV
+                    h_7Alpha_4eRel_BeBe->Fill(EneInCmFrame);
+                    h_7Alpha_4eRel_ifBe->Fill(EneInCmFrame);
+                }
+            }
+        }
+
+        if (AA28Type == 1) {
+            if (NumBe == 0 && !TypeIdentified) {
+                Alpha7Type = 1;
+                TypeIdentified = kTRUE;
+            }
+            if (NumBe == 1 && !TypeIdentified) {
+                Alpha7Type = 2;
+                TypeIdentified = kTRUE;
+            }
+            if (NumBe == 2 && !TypeIdentified) {
+                if (Be1Type == 0 && Be2Type == 0) {
+                    Alpha7Type = 5;
+                    TypeIdentified = kTRUE;
+                }
+                if ((Be1Type == 0 && Be2Type == 1)
+                    || (Be1Type == 1 && Be2Type == 0)) {
+                    Alpha7Type = 6;
+                    TypeIdentified = kTRUE;
+                }
+                if ((Be1Type == 0 && Be2Type == 2)
+                    || (Be1Type == 2 && Be2Type == 0)) {
+                    Alpha7Type = 7;
+                    TypeIdentified = kTRUE;
+                }
+                if ((Be1Type == 1 && Be2Type == 1)) {
+                    Alpha7Type = 8;
+                    TypeIdentified = kTRUE;
+                }
+                if ((Be1Type == 1 && Be2Type == 2)
+                    || (Be1Type == 2 && Be2Type == 1)) {
+                    Alpha7Type = 9;
+                    TypeIdentified = kTRUE;
+                }
+                if ((Be1Type == 2 && Be2Type == 2)
+                    || (Be1Type == 2 && Be2Type == 2)) {
+                    Alpha7Type = 10;
+                    TypeIdentified = kTRUE;
+                }
+            }
+            if (NumBe == 3 && !TypeIdentified) {
+                if (Be1Type == 0 && Be2Type == 0 && Be3Type == 0) {
+                    Alpha7Type = 11;
+                    TypeIdentified = kTRUE;
+                }
+                if ((Be1Type == 0 && Be2Type == 0 && Be3Type == 1)
+                    || (Be1Type == 0 && Be2Type == 1 && Be3Type == 0)
+                    || (Be1Type == 1 && Be2Type == 0 && Be3Type == 0)) {
+                    Alpha7Type = 12;
+                    TypeIdentified = kTRUE;
+                }
+                if ((Be1Type == 0 && Be2Type == 0 && Be3Type == 2)
+                    || (Be1Type == 0 && Be2Type == 2 && Be3Type == 0)
+                    || (Be1Type == 2 && Be2Type == 0 && Be3Type == 0)) {
+                    Alpha7Type = 13;
+                    TypeIdentified = kTRUE;
+                }
+            }
+            if (!TypeIdentified) {
+                Alpha7Type = 14;
+                h_Unident_NumBe->Fill(NumBe);
+            }
+            // cout <<"Type: " << Alpha7Type << endl;
+            //printf("h: Alpha7Type= %d\n",Alpha7Type);
+            h_7Alpha_Type->Fill(Alpha7Type);
+
+            fSource->Reset();
+
+            for (Int_t jj = 1; jj <= AA28Mult; jj++) {
+                // cout <<"ADDING FRAG" << endl;
+                // cout <<"Z28: " << Z28[jj] << endl;
+                // cout <<"A28: " << A28[jj] << endl;
+                // cout <<"Theta: " << ThetaA28[jj] << endl;
+                // cout <<"Phi: " << PhiA28[jj] << endl;
+                // cout <<"Energy: " << EnergyA28[jj] << endl;
+                fSource->AnalyzeFragDeg(
+                    Z28[jj],
+                    A28[jj],
+                    ThetaA28[jj],
+                    PhiA28[jj],
+                    EnergyA28[jj]);
+            }
+            // cout << endl;
+            Double_t QP_ExA = fSource->GetQP_ExA();
+            Double_t QP_Ex = fSource->GetQP_Ex();
+            h_7Alpha_Type_Ex->Fill(Alpha7Type, QP_Ex);
+        }
+        // Shape analysis
+        //printf"Start Shape analysis\n");
+        Double_t AlphaKESource = 0;
+        Double_t AlphaVzSource = 0;
+        Double_t AlphaVtSource = 0;
+        Double_t AlphaVxSource = 0;
+        Double_t AlphaVySource = 0;
+        Double_t AlphaPXSource = 0;
+        Double_t AlphaPYSource = 0;
+        Double_t AlphaPZSource = 0;
+        Double_t sphericity = 0., coplanarity = 0.;
+        Double_t xmom[4] = {0., 0., 0., 0.};
+        double distRD, distDS;
+        int distRDType, distDSType, distRSType, Disk;
+
+        //Int_t Alpha7Type;
+        //1 = no 8Be/12C
+        //2 = 1 8Be G.S.
+        //3 = 1 12C 0+ hoyle
+        //4 = 1 12C 3-
+        //5 = 2 8Be G.S.
+        //6 = 1 8Be G.S. + 1 12C 0+ hoyle
+        //7 = 1 8Be G.S. + 1 12C 3-
+        //8 = 1 12C 0+ hoyle + 1 12C 0+ hoyle
+        //9 = 1 12C 0+ hoyle + 1 12C 3-
+        //10 = 1 12C 3- + 1 12C 3-
+        //11 = 3 8Be G.S.
+        //12 = 2 8Be G.S. + 0+
+        //13 = 2 8Be G.S. + 3-
+        //14 not identified
+        // ShapeType
+        int ShapeType = 0;
+        double Pkcm;
+        int iSphe, iCorp;
+        if (AA28Type == 1) {
+            fNevt++;
+            double mEx_alpha;
+            double mEx_28Si;
+            double Qvalue_7Alpha, Qvalue_4Alpha_12C0, Qvalue_4Alpha_12C3;
+            // Q-value
+            TGeoElementRN* nuclide = fTable->GetElementRN(4, 2);
+            mEx_alpha = nuclide->MassEx();
+            nuclide = fTable->GetElementRN(28, 14);
+            mEx_28Si = nuclide->MassEx();
+            Qvalue_7Alpha = 7 * mEx_alpha - mEx_28Si;
+            Qvalue_4Alpha_12C0 = 4 * mEx_alpha - mEx_28Si + 7.65;
+            Qvalue_4Alpha_12C3 = 4 * mEx_alpha - mEx_28Si + 9.64;
+            // Ex
+            double Ex = 0., Ekcm;
+            for (Int_t i = 0; i < AA28Mult; i++) {
+                Ekcm = fSource->GetFragmentKE_SourceFrame(i);
+                //printf("%d Ekcm=%lf\n",i,Ekcm);
+                Ex += Ekcm;  // MeV
+            }
+
+            Ex = Ex + Qvalue_7Alpha;
+            //printf("Ex =%lf Qvalue=%lf\n",Ex,Qvalue_7Alpha);
+
+            for (Int_t i = 0; i < AA28Mult; i++) {
+                AlphaKESource = fSource->GetFragmentKE_SourceFrame(i);
+                AlphaVzSource = fSource->GetFragmentVZ_SourceFrame(i) * 29.9792;
+                AlphaVxSource = fSource->GetFragmentVX_SourceFrame(i) * 29.9792;
+                AlphaVySource = fSource->GetFragmentVY_SourceFrame(i) * 29.9792;
+                AlphaPXSource = fSource->GetFragmentPX_SourceFrame(i);
+                AlphaPYSource = fSource->GetFragmentPY_SourceFrame(i);
+                AlphaPZSource = fSource->GetFragmentPZ_SourceFrame(i);
+                //printf("AlphaSource E=%lf \n",AlphaKESource);
+                //printf("AlphaSource V=%lf %lf %lf \n",AlphaVxSource,AlphaVySource,AlphaVzSource);
+                //printf("AlphaSource P=%lf %lf %lf \n",AlphaPXSource,AlphaPYSource,AlphaPZSource);
+                if (AlphaVySource >= 0) {
+                    AlphaVtSource = sqrt(
+                        AlphaVxSource * AlphaVxSource
+                        + AlphaVySource * AlphaVySource);
+                }
+                if (AlphaVySource < 0) {
+                    AlphaVtSource = -sqrt(
+                        AlphaVxSource * AlphaVxSource
+                        + AlphaVySource * AlphaVySource);
+                }
+                // cout << "Vz: " << AlphaVzSource << endl;
+                //cout << "Vt: " << AlphaVtSource << endl;
+
+                //h_7Alpha_Vt_Vz_SourceFrame->Fill(AlphaVzSource, AlphaVtSource);
+
+                //h_7Alpha_KE_SourceFrame->Fill(AlphaKESource);
+                //KE7Alpha[i] = AlphaKESource;
+                // Pkcm
+                Pkcm = AlphaPXSource * AlphaPXSource
+                    + AlphaPYSource * AlphaPYSource
+                    + AlphaPZSource * AlphaPZSource;
+                if (Pkcm > 0.)
+                    Pkcm = TMath::Sqrt(Pkcm);
+                h_7Alpha_Pkcm->Fill(Pkcm);
+                if (Alpha7Type == 2)
+                    h_7Alpha_Pkcm_ifBe_M1->Fill(Pkcm);
+                if (Alpha7Type == 5)
+                    h_7Alpha_Pkcm_ifBe_M2->Fill(Pkcm);
+                if (Alpha7Type == 3)
+                    h_7Alpha_Pkcm_if12C0->Fill(Pkcm);
+                if (Alpha7Type == 4)
+                    h_7Alpha_Pkcm_if12C3->Fill(Pkcm);
+
+                xmom[0] = AlphaPXSource;
+                xmom[1] = AlphaPYSource;
+                xmom[2] = AlphaPZSource;
+                /*
+        double dp0=150.0;
+        double PI=3.14159;
+        double prn1,prn2,prn3,prn4,dpx=0.,dpy=0.,dpz=0.,dpp;
+        //for (int n=0;n<100;n++){   // 100 test particle
+
+        double fac1=2.0,fac2=0.5,fac3=0.5;
+
+          for(int i=0;i<1;i++){      // 1 nuclons
+            prn1=gRandom->Rndm();
+            prn2=gRandom->Rndm();
+            prn3=gRandom->Rndm();
+            prn4=gRandom->Rndm();
+            dpx=dpx+dp0*TMath::Sqrt(-2*TMath::Log(prn1))*TMath::Sin(2.*PI*prn2);
+            dpy=dpy+dp0*TMath::Sqrt(-2*TMath::Log(prn1))*TMath::Cos(2.*PI*prn2);
+            dpz=dpz+dp0*TMath::Sqrt(-2*TMath::Log(prn3))*TMath::Sin(2.*PI*prn4);
+          }
+	xmom[0] = dpx*fac1;
+        xmom[1] = dpy*fac2;
+        xmom[2] = dpz*fac3;
+
+	  //printf("px: %lf %lf \n", AlphaPXSource,px);
+	  //printf("py: %lf %lf \n", AlphaPYSource,py);
+	  //printf("py: %lf %lf \n", AlphaPZSource,pz);
+*/
+                xmom[3] = sqrt(
+                    xmom[0] * xmom[0] + xmom[1] * xmom[1] + xmom[2] * xmom[2]);
+                if (xmom[3] <= 0)
+                    xmom[3] = 1;
+                fTensor->Increment(xmom);
+            }
+            //printf("xmon:%lf %lf %lf %lf\n",xmom[0],xmom[1],xmom[2],xmom[3]);
+            Bool_t statDiag =
+                fTensor->GetSphericityCoplanarity(sphericity, coplanarity);
+            //printf("shape:sphericity=%lf corplanarity=%lf \n",sphericity, coplanarity);
+
+            if (statDiag) {
+                // cout <<"Sphericity: " << sphericity << endl;
+                //cout <<"Coplanarity: " << coplanarity << endl;
+                // ShapeType
+                if (coplanarity > 0.175 && sphericity > 0.42)
+                    ShapeType = 1;
+                if (coplanarity < 0.175 && sphericity > 0.42)
+                    ShapeType = 2;
+                if (coplanarity <= 0.175 && sphericity <= 0.42)
+                    ShapeType = 3;
+
+                //if (coplanarity > 0.22 && coplanarity < 0.28 && sphericity > 0.6 && sphericity < 0.72) ShapeType=4;
+                //if (coplanarity > 0.14 && coplanarity < 0.22 && sphericity > 0.6 && sphericity < 0.72) ShapeType=5;
+                //if (coplanarity > 0.11 && coplanarity < 0.22 && sphericity > 0.47 && sphericity < 0.60) ShapeType=6;
+                //if (coplanarity > 0.07 && coplanarity < 0.14 && sphericity > 0.32 && sphericity < 0.42) ShapeType=7;
+
+                iSphe = (sphericity - 0.2) / 0.1 + 1;
+                iCorp = (coplanarity - 0.05) / 0.05 + 1;
+                if (iSphe > 4)
+                    iSphe = -1;
+                if (iCorp > 4)
+                    iCorp = -1;
+
+                //printf("ShapeType =%d C=%lf S=%lf\b",ShapeType,coplanarity,sphericity);
+                //Shape hist
+                h_7Alpha_Shape->Fill(sphericity, coplanarity);
+                if (Alpha7Type == 2)
+                    h_7Alpha_Shape_ifBe_M1->Fill(sphericity, coplanarity);
+                if (Alpha7Type == 5)
+                    h_7Alpha_Shape_ifBe_M2->Fill(sphericity, coplanarity);
+                if (Alpha7Type == 3)
+                    h_7Alpha_Shape_if12C0->Fill(sphericity, coplanarity);
+                if (Alpha7Type == 4)
+                    h_7Alpha_Shape_if12C3->Fill(sphericity, coplanarity);
+                // Shape with Ex cut
+                int iEx = (Ex - 60.) / 10;
+                if (iEx < 0)
+                    iEx = 0;
+                if (iEx > 9)
+                    iEx = 9;
+                h_7Alpha_Shape_nEx[iEx]->Fill(sphericity, coplanarity);
+                if (Alpha7Type == 2)
+                    h_7Alpha_Shape_ifBe_M1_nEx[iEx]->Fill(
+                        sphericity,
+                        coplanarity);
+                if (Alpha7Type == 5)
+                    h_7Alpha_Shape_ifBe_M2_nEx[iEx]->Fill(
+                        sphericity,
+                        coplanarity);
+                if (Alpha7Type == 3)
+                    h_7Alpha_Shape_if12C0_nEx[iEx]->Fill(
+                        sphericity,
+                        coplanarity);
+                if (Alpha7Type == 4)
+                    h_7Alpha_Shape_if12C3_nEx[iEx]->Fill(
+                        sphericity,
+                        coplanarity);
+
+                // Shape cut
+                double X0 = sphericity;
+                double Y0 = coplanarity;
+                double X1, Y1;
+                double r3 = 1.732;
+                X1 = (Y0 + X0 * r3) / (1. / r3 + r3);
+                Y1 = X1 / r3;
+                distRD = (X1 - X0) * (X1 - X0) + (Y1 - Y0) * (Y1 - Y0);
+                if (distRD > 0.)
+                    distRD = TMath::Sqrt(distRD);
+
+                h_7Alpha_distRD->Fill(distRD);
+
+                //if(distRD <=0 || distRD>=0.3) distRDType=0;
+                if (distRD <= 0)
+                    distRDType = 0;
+                else
+                    distRDType = distRD / 0.05 + 1;
+                if (distRDType > 6)
+                    distRDType = 6;
+
+                double X2, Y2;
+                X2 = (3 + X0 - r3 * Y0) / 4.;
+                Y2 = -r3 * (X2 - 1.);
+                distDS = (X2 - X0) * (X2 - X0) + (Y2 - Y0) * (Y2 - Y0);
+                if (distDS > 0.)
+                    distDS = TMath::Sqrt(distDS);
+
+                h_7Alpha_distDS->Fill(distDS);
+
+                //if(distDS <=0 || distDS>=0.6) distDSType=0;
+                if (distDS <= 0)
+                    distDSType = 0;
+                else
+                    distDSType = distDS / 0.0875 + 1;
+                if (distDSType > 6)
+                    distDSType = 6;
+
+                //if(coplanarity <=0 || coplanarity>=0.3) distRSType=0;
+                h_7Alpha_distRS->Fill(coplanarity);
+
+                if (coplanarity <= 0)
+                    distRSType = 0;
+                else
+                    distRSType = coplanarity / 0.05 + 1;
+                if (distRSType > 6)
+                    distRSType = 6;
+
+                //Disk=RD1-2@DS1-4
+                Disk = 0;
+                if (distRDType <= 2 && distDSType <= 5)
+                    Disk = 1;
+            }
+            // Shape center ShapeType=4;
+            if ((distRDType == 3 || distRDType == 4)
+                && (distRSType == 3 || distRSType == 4)
+                && (distDSType == 3 || distDSType == 4))
+                ShapeType = 4;
+
+            // crw test particle method
+            fTensor->Clear();
+            Double_t xmomT[4] = {0., 0., 0., 0.};
+
+            for (Int_t i = 0; i < AA28Mult; i++) {
+                //double dp0=78.93;
+                //double dp0=0.0;     // no fluctuation
+                double dp0 = 150.0;
+                double PI = 3.14159;
+                double prn1, prn2, prn3, prn4, dpx = 0., dpy = 0., dpz = 0.,
+                                               dpp;
+                //for (int n=0;n<100;n++){   // 100 test particle
+
+                //double fac1=1.0,fac2=1.0,fac3=1.0;  // sphere
+                double fac1 = 1.3, fac2 = 1.3, fac3 = 0.6;  // disk
+                //double fac1=1.3,fac2=1.3,fac3=0.6;  // rod
+
+                for (int n = 0; n < 1; n++) {  // 1 test particle
+                    //for(int i=0;i<4;i++){      // 4 nuclons
+                    for (int itry = 0; itry < 100; itry++) {
+                        for (int i = 0; i < 1; i++) {
+                            prn1 = gRandom->Rndm();
+                            prn2 = gRandom->Rndm();
+                            prn3 = gRandom->Rndm();
+                            prn4 = gRandom->Rndm();
+                            dpx = dpx
+                                + dp0 * TMath::Sqrt(-2 * TMath::Log(prn1))
+                                    * TMath::Sin(2. * PI * prn2);
+                            dpy = dpy
+                                + dp0 * TMath::Sqrt(-2 * TMath::Log(prn1))
+                                    * TMath::Cos(2. * PI * prn2);
+                            dpz = dpz
+                                + dp0 * TMath::Sqrt(-2 * TMath::Log(prn3))
+                                    * TMath::Sin(2. * PI * prn4);
+                        }
+                        xmomT[0] = dpx * fac1;
+                        xmomT[1] = dpy * fac2;
+                        xmomT[2] = dpz * fac3;
+                        //set troidal
+                        double momxy = xmom[0] * xmom[0] + xmom[1] * xmom[1];
+                        if (momxy > 150. * 150.)
+                            break;
+                    }
+                    h_7Alpha_dpx->Fill(dpx * fac1);
+                    h_7Alpha_dpy->Fill(dpy * fac2);
+                    h_7Alpha_dpz->Fill(dpz * fac3);
+                    dpp = dpx * dpx + dpy * dpy + dpz * dpz;
+                    if (dpp > 0.)
+                        dpp = TMath::Sqrt(dpp);
+                    h_7Alpha_dpp->Fill(dpp);
+                    xmomT[3] = sqrt(
+                        xmomT[0] * xmomT[0] + xmomT[1] * xmomT[1]
+                        + xmomT[2] * xmomT[2]);
+                    if (xmomT[3] <= 0)
+                        xmomT[3] = 1;
+                    fTensor->Increment(xmomT);
+                    //fTensorT->Increment(xmomT);
+                }
+            }
+
+            double sphericityT = 0., coplanarityT = 0.;
+            statDiag =
+                fTensor->GetSphericityCoplanarity(sphericityT, coplanarityT);
+            if (statDiag) {
+                // cout <<"SphericityT: " << sphericityT << endl;
+                //cout <<"CoplanarityT: " << coplanarityT << endl;
+                h_7Alpha_ShapeT->Fill(sphericityT, coplanarityT);
+                if (Alpha7Type == 2)
+                    h_7Alpha_ShapeT_ifBe_M1->Fill(sphericityT, coplanarityT);
+                if (Alpha7Type == 5)
+                    h_7Alpha_ShapeT_ifBe_M2->Fill(sphericityT, coplanarityT);
+                if (Alpha7Type == 3)
+                    h_7Alpha_ShapeT_if12C0->Fill(sphericityT, coplanarityT);
+                if (Alpha7Type == 4)
+                    h_7Alpha_ShapeT_if12C3->Fill(sphericityT, coplanarityT);
+            }
+
+            /* 
+        double X0=sphericity;
+        double Y0=coplanarity;
+        double X1,Y1,dist;
+        double r3=1.732;
+        X1=(Y0+X0*r3)/(1./r3+r3);
+        Y1=X1/r3;
+        dist=(X1-X0)*(X1-X0)+(Y1-Y0)*(Y1-Y0);
+        if (dist > 0.) dist =TMath::Sqrt(dist);
+
+        */
+            //}
+            // roy's new stuff
+            //Shape for 4alphas w 12C0,12C3-
+            /*
+      if(Alpha7Type==3 || Alpha7Type==4) {
+        fTensor->Clear();        
+        xmom[0] =0.,xmom[1] =0.,xmom[2] =0.,xmom[3] =0.;
+        	
+        for (Int_t i = 0; i < AA28Mult; i++)
+        {
+	  if(Alpha7Type==3 && (i==C12_0[0] || i==C12_0[1] || i==C12_0[2])) continue;
+	  if(Alpha7Type==4 && (i==C12_3[0] || i==C12_3[1] || i==C12_3[2])) continue;
+	  
+          AlphaPXSource = fSource->GetFragmentPX_SourceFrame(i);
+          AlphaPYSource = fSource->GetFragmentPY_SourceFrame(i);
+          AlphaPZSource = fSource->GetFragmentPZ_SourceFrame(i);
+
+          xmom[0] = AlphaPXSource;
+          xmom[1] = AlphaPYSource;
+          xmom[2] = AlphaPZSource;
+          xmom[3] = sqrt(xmom[0] * xmom[0] + xmom[1] * xmom[1] + xmom[2] * xmom[2]);
+          if (xmom[3] <= 0)
+            xmom[3] = 1;
+          fTensor->Increment(xmom);
+        }
+
+        //printf("xmon:%lf %lf %lf %lf\n",xmom[0],xmom[1],xmom[2],xmom[3]); 
+        statDiag = fTensor->GetSphericityCoplanarity(sphericity, coplanarity);
+        //printf("shape:sphericity=%lf corplanarity=%lf \n",sphericity, coplanarity); 
+
+        if (statDiag)
+        {
+          if(Alpha7Type==3) h_7Alpha_Shape_4Alpha_wo12C0->Fill(sphericity, coplanarity);
+          if(Alpha7Type==4) h_7Alpha_Shape_4Alpha_wo12C3->Fill(sphericity, coplanarity);
+        }
+
+     	//add C12_3 3alpha->C12
+
+	int ii,jj,ll;
+	if(Alpha7Type==3) {
+          ii=C12_0[0];
+          jj=C12_0[1];
+          ll=C12_0[2];
+	}
+	if(Alpha7Type==4) {
+          ii=C12_3[0];
+          jj=C12_3[1];
+          ll=C12_3[2];
+	}
+        double AlphaPX12C = fSource->GetFragmentPX_SourceFrame(ii)+fSource->GetFragmentPX_SourceFrame(jj)+fSource->GetFragmentPX_SourceFrame(ll);
+        double AlphaPY12C = fSource->GetFragmentPY_SourceFrame(ii)+fSource->GetFragmentPY_SourceFrame(jj)+fSource->GetFragmentPY_SourceFrame(ll);
+        double AlphaPZ12C = fSource->GetFragmentPZ_SourceFrame(ii)+fSource->GetFragmentPZ_SourceFrame(jj)+fSource->GetFragmentPZ_SourceFrame(ll);
+
+        xmom[0] = AlphaPX12C;
+        xmom[1] = AlphaPY12C;
+        xmom[2] = AlphaPZ12C;
+        xmom[3] = sqrt(xmom[0] * xmom[0] + xmom[1] * xmom[1] + xmom[2] * xmom[2]);
+        if (xmom[3] <= 0)
+          xmom[3] = 1;
+        fTensor->Increment(xmom);
+
+        //printf("xmon:%lf %lf %lf %lf\n",xmom[0],xmom[1],xmom[2],xmom[3]); 
+        statDiag = fTensor->GetSphericityCoplanarity(sphericity, coplanarity);
+        //printf("shape:sphericity=%lf corplanarity=%lf \n",sphericity, coplanarity); 
+
+        if (statDiag)
+        {
+          //h_7Alpha_Shape->Fill(sphericity, coplanarity);
+        }
+      }   // end Alpha7Tpe=3 or 4
+      */
+            //Ekcm && 2eRel
+            double Pkcm;
+            for (Int_t ii = 1; ii <= AA28Mult; ii++) {
+                Ekcm = fSource->GetFragmentKE_SourceFrame(ii);
+                //printf("%d Ekcm=%lf\n",i,Ekcm);
+                for (Int_t jj = ii + 1; jj <= AA28Mult; jj++) {
+                    eRel = 0;
+                    vv1.SetMagThetaPhi(
+                        sqrt(2 * EnergyA28[ii] / 931.5 / A28[ii]),
+                        ThetaA28[ii] * 3.14159 / 180.,
+                        PhiA28[ii] * 3.14159 / 180.);  // units of c
+                    vv2.SetMagThetaPhi(
+                        sqrt(2 * EnergyA28[jj] / 931.5 / A28[jj]),
+                        ThetaA28[jj] * 3.14159 / 180.,
+                        PhiA28[jj] * 3.14159 / 180.);  // units of c
+                    vRel = vv1 - vv2;
+                    eRel = 931.5 * vRel.Mag2();
+
+                    h_7Alpha_2eRel->Fill(eRel);
+                    if (Alpha7Type == 2)
+                        h_7Alpha_2eRel_ifBe_M1->Fill(eRel);
+                    if (Alpha7Type == 5)
+                        h_7Alpha_2eRel_ifBe_M2->Fill(eRel);
+                    if (Alpha7Type == 3)
+                        h_7Alpha_2eRel_if12C0->Fill(eRel);
+                    if (Alpha7Type == 4)
+                        h_7Alpha_2eRel_if12C3->Fill(eRel);
+
+                    h_7Alpha_Ekcm_2eRel->Fill(Ekcm, eRel);
+                    if (Alpha7Type == 2)
+                        h_7Alpha_Ekcm_2eRel_ifBe_M1->Fill(Ekcm, eRel);
+                    if (Alpha7Type == 5)
+                        h_7Alpha_Ekcm_2eRel_ifBe_M2->Fill(Ekcm, eRel);
+                    if (Alpha7Type == 3)
+                        h_7Alpha_Ekcm_2eRel_if12C0->Fill(Ekcm, eRel);
+                    if (Alpha7Type == 4)
+                        h_7Alpha_Ekcm_2eRel_if12C3->Fill(Ekcm, eRel);
+
+                    // Ekcm with ShpaeCut
+                }
+                if (Alpha7Type == 3) {
+                    if (ii == C12_0[0] || ii == C12_0[1] || ii == C12_0[2])
+                        continue;
+                    if (jj == C12_0[0] || jj == C12_0[1] || jj == C12_0[2])
+                        continue;
+                }
+                if (Alpha7Type == 4) {
+                    if (ii == C12_3[0] || ii == C12_3[1] || ii == C12_3[2])
+                        continue;
+                    if (jj == C12_3[0] || jj == C12_3[1] || jj == C12_3[2])
+                        continue;
+                }
+                if (Alpha7Type == 3)
+                    h_7Alpha_2eRel_4Alpha_wo12C0->Fill(eRel);
+                if (Alpha7Type == 4)
+                    h_7Alpha_2eRel_4Alpha_wo12C3->Fill(eRel);
+                if (Alpha7Type == 3)
+                    h_7Alpha_Ekcm_2eRel_4Alpha_wo12C0->Fill(Ekcm, eRel);
+                if (Alpha7Type == 4)
+                    h_7Alpha_Ekcm_2eRel_4Alpha_wo12C3->Fill(Ekcm, eRel);
+            }
+            /*
+      double mEx_alpha;
+      double mEx_28Si;
+      double Qvalue_7Alpha,Qvalue_4Alpha_12C0,Qvalue_4Alpha_12C3;
+// Q-value
+      TGeoElementRN *nuclide = fTable->GetElementRN(4,2);
+      mEx_alpha = nuclide->MassEx();
+      nuclide = fTable->GetElementRN(28,14);
+      mEx_28Si = nuclide->MassEx();
+      Qvalue_7Alpha=7*mEx_alpha-mEx_28Si;
+      Qvalue_4Alpha_12C0=4*mEx_alpha-mEx_28Si+7.65;
+      Qvalue_4Alpha_12C3=4*mEx_alpha-mEx_28Si+9.64;
+*/
+            //Ekcm flag
+            int Ekcm_flag5 = 1;  // if all Ekcm>5 MeV
+            int Ekcm_flag4 = 1;  // if all Ekcm>4 MeV
+            int Ekcm_flag3 = 1;  // if all Ekcm>3 MeV
+            int Ekcm_flag2 = 1;  // if all Ekcm>2 MeV
+            for (Int_t i = 0; i < AA28Mult; i++) {
+                AlphaKESource = fSource->GetFragmentKE_SourceFrame(i);
+                if (AlphaKESource < 5.)
+                    Ekcm_flag5 = 0;
+                if (AlphaKESource < 4.)
+                    Ekcm_flag4 = 0;
+                if (AlphaKESource < 3.)
+                    Ekcm_flag3 = 0;
+                if (AlphaKESource < 2.)
+                    Ekcm_flag2 = 0;
+            }
+            //Ekcm
+            //double Ex=0.;
+            for (Int_t i = 0; i < AA28Mult; i++) {
+                Ekcm = fSource->GetFragmentKE_SourceFrame(i);
+                //printf("%d Ekcm=%lf\n",i,Ekcm);
+
+                h_7Alpha_Ekcm->Fill(Ekcm);
+                if (Alpha7Type == 2)
+                    h_7Alpha_Ekcm_ifBe_M1->Fill(Ekcm);
+                if (Alpha7Type == 5)
+                    h_7Alpha_Ekcm_ifBe_M2->Fill(Ekcm);
+                if (Alpha7Type == 3)
+                    h_7Alpha_Ekcm_if12C0->Fill(Ekcm);
+                if (Alpha7Type == 4)
+                    h_7Alpha_Ekcm_if12C3->Fill(Ekcm);
+                //Ex += Ekcm; // MeV
+                if (Alpha7Type == 3
+                    && (i == C12_0[0] || i == C12_0[1] || i == C12_0[2]))
+                    continue;
+                if (Alpha7Type == 4
+                    && (i == C12_3[0] || i == C12_3[1] || i == C12_3[2]))
+                    continue;
+                if (Alpha7Type == 3)
+                    h_7Alpha_Ekcm_4Alpha_wo12C0->Fill(Ekcm);
+                if (Alpha7Type == 4)
+                    h_7Alpha_Ekcm_4Alpha_wo12C3->Fill(Ekcm);
+
+                if (ShapeType > 0)
+                    h_7Alpha_Ekcm_ShapeCut[ShapeType - 1]->Fill(Ekcm);
+            }
+
+            //Ex=Ex+Qvalue_7Alpha;
+            //printf("Ex =%lf Qvalue=%lf\n",Ex,Qvalue_7Alpha);
+
+            //Ekcm w/Ex cut
+            int iEx = (Ex - 60.) / 10;
+            if (iEx > 9)
+                iEx = 9;
+            if (iEx < 0)
+                iEx = 0;
+            for (Int_t i = 0; i < AA28Mult; i++) {
+                Ekcm = fSource->GetFragmentKE_SourceFrame(i);
+                //printf("%d Ekcm=%lf\n",i,Ekcm);
+
+                h_7Alpha_Ekcm_nEx[iEx]->Fill(Ekcm);
+                if (Alpha7Type == 2)
+                    h_7Alpha_Ekcm_ifBe_M1_nEx[iEx]->Fill(Ekcm);
+                if (Alpha7Type == 5)
+                    h_7Alpha_Ekcm_ifBe_M2_nEx[iEx]->Fill(Ekcm);
+                if (Alpha7Type == 3)
+                    h_7Alpha_Ekcm_if12C0_nEx[iEx]->Fill(Ekcm);
+                if (Alpha7Type == 4)
+                    h_7Alpha_Ekcm_if12C3_nEx[iEx]->Fill(Ekcm);
+            }
+
+            //Ex histogram
+            h_7Alpha_Ex->Fill(Ex);
+
+            //Ex_Nk
+            if (fNevt >= 56000)
+                h_7Alpha_Ex_Nnk[4]->Fill(Ex);
+            else if (fNevt >= 16000)
+                h_7Alpha_Ex_Nnk[3]->Fill(Ex);
+            else if (fNevt >= 6000)
+                h_7Alpha_Ex_Nnk[2]->Fill(Ex);
+            else if (fNevt >= 1000)
+                h_7Alpha_Ex_Nnk[1]->Fill(Ex);
+            else
+                h_7Alpha_Ex_Nnk[0]->Fill(Ex);
+
+            int n10, n20, n45, n3;
+            n10 = fNevt % 19;
+            n20 = fNevt % 10;
+            n45 = fNevt % 4;
+            n3 = fNevt % 3;
+            h_7Alpha_Ex_N10k[n10]->Fill(Ex);
+            h_7Alpha_Ex_N20k[n20]->Fill(Ex);
+            h_7Alpha_Ex_N45k[n45]->Fill(Ex);
+            // Ex_Exclusive
+            if (Alpha7Type == 1)
+                h_7Alpha_Ex_Excl->Fill(Ex);
+
+            //ShapeCut
+            //printf("ShapeCut strat\n");
+            if (ShapeType > 0) {
+                h_7Alpha_Ex_ShapeCut[ShapeType - 1]->Fill(Ex);
+                if (Alpha7Type == 1)
+                    h_7Alpha_Ex_Excl_ShapeCut[ShapeType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 2) {
+                h_7Alpha_Ex_ifBe_M1->Fill(Ex);
+                if (ShapeType > 0)
+                    h_7Alpha_Ex_ifBe_M1_ShapeCut[ShapeType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 5) {
+                h_7Alpha_Ex_ifBe_M2->Fill(Ex);
+                h_7Alpha_Ex_ifBe_M2_N1k[n3]->Fill(Ex);
+                if (ShapeType > 0)
+                    h_7Alpha_Ex_ifBe_M2_ShapeCut[ShapeType - 1]->Fill(Ex);
+                if (distRDType < 2)
+                    h_7Alpha_Ex_ifBe_M2_ShapeCut[4]->Fill(Ex);  // ShapeCut4
+                if (distRDType <= 3)
+                    h_7Alpha_Ex_ifBe_M2_ShapeCut[5]->Fill(Ex);  // ShapeCut4
+                if (distRDType > 3)
+                    h_7Alpha_Ex_ifBe_M2_ShapeCut[6]->Fill(Ex);  // ShapeCut4
+            }
+            if (Alpha7Type == 3) {
+                h_7Alpha_Ex_if12C0->Fill(Ex);
+                h_7Alpha_Ex_if12C0_N1k[n3]->Fill(Ex);
+                if (ShapeType > 0)
+                    h_7Alpha_Ex_if12C0_ShapeCut[ShapeType - 1]->Fill(Ex);
+                if (distRDType < 2)
+                    h_7Alpha_Ex_if12C0_ShapeCut[4]->Fill(Ex);  // ShapeCut4
+                if (distRDType <= 3)
+                    h_7Alpha_Ex_if12C0_ShapeCut[5]->Fill(Ex);  // ShapeCut4
+                if (distRDType > 3)
+                    h_7Alpha_Ex_if12C0_ShapeCut[6]->Fill(Ex);  // ShapeCut4
+            }
+            if (Alpha7Type == 4) {
+                h_7Alpha_Ex_if12C3->Fill(Ex);
+                if (ShapeType > 0)
+                    h_7Alpha_Ex_if12C3_ShapeCut[ShapeType - 1]->Fill(Ex);
+
+                //SC25
+                //if(iSphe > -1 && iCorp > -1)  h_7Alpha_Ex_if12C3_SC25[iSphe][iCorp]->Fill(Ex);
+            }
+            if (Alpha7Type == 3 || Alpha7Type == 4)
+                h_7Alpha_Ex_if12C03->Fill(Ex);
+
+            //with EkCut
+            for (int ie = 0; ie < 4; ie++) {
+                int iek = -1;
+                if (ie == 0 && Ekcm_flag2 == 1)
+                    iek = 0;
+                if (ie == 1 && Ekcm_flag3 == 1)
+                    iek = 1;
+                if (ie == 2 && Ekcm_flag4 == 1)
+                    iek = 2;
+                if (ie == 3 && Ekcm_flag5 == 1)
+                    iek = 3;
+                if (iek >= 0) {
+                    h_7Alpha_Ex_EkCut[iek]->Fill(Ex);
+                    if (Alpha7Type == 1)
+                        h_7Alpha_Ex_Excl_EkCut[iek]->Fill(Ex);
+
+                    if (Alpha7Type == 2)
+                        h_7Alpha_Ex_ifBe_M1_EkCut[iek]->Fill(Ex);
+                    if (Alpha7Type == 5)
+                        h_7Alpha_Ex_ifBe_M2_EkCut[iek]->Fill(Ex);
+                    if (Alpha7Type == 3)
+                        h_7Alpha_Ex_if12C0_EkCut[iek]->Fill(Ex);
+                    if (Alpha7Type == 4)
+                        h_7Alpha_Ex_if12C3_EkCut[iek]->Fill(Ex);
+                    if (Alpha7Type == 3 || Alpha7Type == 4)
+                        h_7Alpha_Ex_if12C03_EkCut[iek]->Fill(Ex);
+                }
+            }
+            //distRD cut
+            //printf("RDCut strat\n");
+            if (distRDType > 0) {
+                h_7Alpha_Ex_distRDCut[distRDType - 1]->Fill(Ex);
+                if (Alpha7Type == 1)
+                    h_7Alpha_Ex_Excl_distRDCut[distRDType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 2) {
+                if (distRDType > 0)
+                    h_7Alpha_Ex_ifBe_M1_distRDCut[distRDType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 5) {
+                if (distRDType > 0)
+                    h_7Alpha_Ex_ifBe_M2_distRDCut[distRDType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 3) {
+                if (distRDType > 0)
+                    h_7Alpha_Ex_if12C0_distRDCut[distRDType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 3 || Alpha7Type == 4) {
+                h_7Alpha_Ex_if12C03->Fill(Ex);
+                if (distRDType > 0)
+                    h_7Alpha_Ex_if12C03_distRDCut[distRDType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 4) {
+                if (distRDType > 0)
+                    h_7Alpha_Ex_if12C3_distRDCut[distRDType - 1]->Fill(Ex);
+            }
+
+            //distDS cut
+            //printf("DSCut strat\n");
+            if (distDSType > 0) {
+                h_7Alpha_Ex_distDSCut[distDSType - 1]->Fill(Ex);
+                if (Alpha7Type == 1)
+                    h_7Alpha_Ex_Excl_distDSCut[distDSType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 2) {
+                if (distDSType > 0)
+                    h_7Alpha_Ex_ifBe_M1_distDSCut[distDSType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 5) {
+                if (distDSType > 0)
+                    h_7Alpha_Ex_ifBe_M2_distDSCut[distDSType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 3) {
+                if (distDSType > 0)
+                    h_7Alpha_Ex_if12C0_distDSCut[distDSType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 3 || Alpha7Type == 4) {
+                if (distDSType > 0)
+                    h_7Alpha_Ex_if12C03_distDSCut[distDSType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 4) {
+                if (distDSType > 0)
+                    h_7Alpha_Ex_if12C3_distDSCut[distDSType - 1]->Fill(Ex);
+            }
+
+            //distRS cut
+            //printf("RSCut strat\n");
+            if (distRSType > 0) {
+                h_7Alpha_Ex_distRSCut[distRSType - 1]->Fill(Ex);
+                if (Alpha7Type == 1)
+                    h_7Alpha_Ex_Excl_distRSCut[distRSType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 2) {
+                if (distRSType > 0)
+                    h_7Alpha_Ex_ifBe_M1_distRSCut[distRSType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 5) {
+                if (distRSType > 0)
+                    h_7Alpha_Ex_ifBe_M2_distRSCut[distRSType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 3) {
+                if (distRSType > 0)
+                    h_7Alpha_Ex_if12C0_distRSCut[distRSType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 3 || Alpha7Type == 4) {
+                if (distRSType > 0)
+                    h_7Alpha_Ex_if12C03_distRSCut[distRSType - 1]->Fill(Ex);
+            }
+            if (Alpha7Type == 4) {
+                if (distRSType > 0)
+                    h_7Alpha_Ex_if12C3_distRSCut[distRSType - 1]->Fill(Ex);
+            }
+
+            //distRD cut with Ekcm-cut
+            for (int ie = 0; ie < 4; ie++) {
+                int iek = -1;
+                if (ie == 0 && Ekcm_flag2 == 1)
+                    iek = 0;
+                if (ie == 1 && Ekcm_flag3 == 1)
+                    iek = 1;
+                if (ie == 2 && Ekcm_flag4 == 1)
+                    iek = 2;
+                if (ie == 3 && Ekcm_flag5 == 1)
+                    iek = 3;
+                if (iek >= 0) {
+                    //printf("RDCut+Ekcut strat distRDType=%d\n",distRDType);
+                    if (distRDType > 0) {
+                        h_7Alpha_Ex_EkCut_RDCut[iek][distRDType - 1]->Fill(Ex);
+                        if (Alpha7Type == 1)
+                            h_7Alpha_Ex_Excl_EkCut_RDCut[iek][distRDType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 2)
+                            h_7Alpha_Ex_ifBe_M1_EkCut_RDCut[iek][distRDType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 5)
+                            h_7Alpha_Ex_ifBe_M2_EkCut_RDCut[iek][distRDType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 3)
+                            h_7Alpha_Ex_if12C0_EkCut_RDCut[iek][distRDType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 3 || Alpha7Type == 4)
+                            h_7Alpha_Ex_if12C03_EkCut_RDCut[iek][distRDType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 4)
+                            h_7Alpha_Ex_if12C3_EkCut_RDCut[iek][distRDType - 1]
+                                ->Fill(Ex);
+                    }
+
+                    //distDS cut with Ekcm-cut
+                    if (distDSType > 0) {
+                        h_7Alpha_Ex_EkCut_DSCut[iek][distDSType - 1]->Fill(Ex);
+                        if (Alpha7Type == 1)
+                            h_7Alpha_Ex_Excl_EkCut_DSCut[iek][distDSType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 2)
+                            h_7Alpha_Ex_ifBe_M1_EkCut_DSCut[iek][distDSType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 5)
+                            h_7Alpha_Ex_ifBe_M2_EkCut_DSCut[iek][distDSType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 3)
+                            h_7Alpha_Ex_if12C0_EkCut_DSCut[iek][distDSType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 3 || Alpha7Type == 4)
+                            h_7Alpha_Ex_if12C03_EkCut_DSCut[iek][distDSType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 4)
+                            h_7Alpha_Ex_if12C3_EkCut_DSCut[iek][distDSType - 1]
+                                ->Fill(Ex);
+                    }
+                    //distDS cut with Ekcm-cut
+                    if (distRSType > 0) {
+                        h_7Alpha_Ex_EkCut_RSCut[iek][distRSType - 1]->Fill(Ex);
+                        if (Alpha7Type == 1)
+                            h_7Alpha_Ex_Excl_EkCut_RSCut[iek][distRSType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 2)
+                            h_7Alpha_Ex_ifBe_M1_EkCut_RSCut[iek][distRSType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 5)
+                            h_7Alpha_Ex_ifBe_M2_EkCut_RSCut[iek][distRSType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 3)
+                            h_7Alpha_Ex_if12C0_EkCut_RSCut[iek][distRSType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 3 || Alpha7Type == 4)
+                            h_7Alpha_Ex_if12C03_EkCut_RSCut[iek][distRSType - 1]
+                                ->Fill(Ex);
+                        if (Alpha7Type == 4)
+                            h_7Alpha_Ex_if12C3_EkCut_RSCut[iek][distRSType - 1]
+                                ->Fill(Ex);
+                    }
+                    // Disk+EkCut
+                    if (Disk == 1) {
+                        h_7Alpha_Ex_Disk_EkCut[iek + 1]->Fill(Ex);
+                        if (Alpha7Type == 1)
+                            h_7Alpha_Ex_Excl_Disk_EkCut[iek + 1]->Fill(Ex);
+                        if (Alpha7Type == 2)
+                            h_7Alpha_Ex_ifBe_M1_Disk_EkCut[iek + 1]->Fill(Ex);
+                        if (Alpha7Type == 5)
+                            h_7Alpha_Ex_ifBe_M2_Disk_EkCut[iek + 1]->Fill(Ex);
+                        if (Alpha7Type == 3)
+                            h_7Alpha_Ex_if12C0_Disk_EkCut[iek + 1]->Fill(Ex);
+                        if (Alpha7Type == 3 || Alpha7Type == 4)
+                            h_7Alpha_Ex_if12C03_Disk_EkCut[iek + 1]->Fill(Ex);
+                        if (Alpha7Type == 4)
+                            h_7Alpha_Ex_if12C3_Disk_EkCut[iek + 1]->Fill(Ex);
+                    }
+                }
+                if (Disk == 1) {
+                    if (Alpha7Type == 1)
+                        h_7Alpha_Ex_Excl_Disk_EkCut[0]->Fill(Ex);
+                    if (Alpha7Type == 2)
+                        h_7Alpha_Ex_ifBe_M1_Disk_EkCut[0]->Fill(Ex);
+                    if (Alpha7Type == 5)
+                        h_7Alpha_Ex_ifBe_M2_Disk_EkCut[0]->Fill(Ex);
+                    if (Alpha7Type == 3)
+                        h_7Alpha_Ex_if12C0_Disk_EkCut[0]->Fill(Ex);
+                    if (Alpha7Type == 3 || Alpha7Type == 4)
+                        h_7Alpha_Ex_if12C03_Disk_EkCut[0]->Fill(Ex);
+                    if (Alpha7Type == 4)
+                        h_7Alpha_Ex_if12C3_Disk_EkCut[0]->Fill(Ex);
+                }  // end of iek loop
+            }  // end of AA28Mult loop
+        }  // end of AA28Type == 1
+    }  //Ztot < 20 loop
+}
