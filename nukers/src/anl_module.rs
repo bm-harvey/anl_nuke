@@ -1,4 +1,5 @@
 use crate::data_set::{ArchivedData, DataCollection, DataSet};
+use colored::Colorize;
 use memmap2::Mmap;
 use rayon::prelude::*;
 use rkyv::ser::serializers::{
@@ -591,7 +592,8 @@ where
     }
 
     fn make_announcment(text: &str) {
-        println!("[[ {} ]]", text);
+        let s = format!("[[ {} ]]", text).blue();
+        println!("{}", s);
     }
     fn manage_output_paths(&self) -> (PathBuf, Option<PathBuf>, Option<PathBuf>, Option<PathBuf>) {
         let in_dir: &Path = Path::new(
@@ -605,10 +607,12 @@ where
         );
 
         if !out_dir.is_dir() {
-            create_dir(out_dir).expect(&format!(
-                "Output{} directory could not be created",
-                out_dir.to_str().unwrap()
-            ));
+            create_dir(out_dir).unwrap_or_else(|_| {
+                panic!(
+                    "Output {} directory could not be created",
+                    out_dir.to_str().unwrap()
+                )
+            });
         }
 
         let out_dir = match &self.filter {
