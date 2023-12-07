@@ -1,5 +1,4 @@
 use faust::event::Event;
-use faust::event::Particle;
 use faust_filter::faust_filter::FaustFilter;
 use itertools::Itertools;
 use nukers::anl_module::EventScrambler;
