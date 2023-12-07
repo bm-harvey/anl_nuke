@@ -316,7 +316,6 @@ impl PhysVec {
     pub fn set_phi_rad(&mut self, phi: f64) -> &mut Self {
         let theta = self.theta_rad();
         let mag = self.mag();
-        let phi = phi;
         self.set_x(mag * theta.sin() * phi.cos());
         self.set_y(mag * theta.sin() * phi.sin());
         self.set_z(mag * theta.cos());
@@ -339,7 +338,6 @@ impl PhysVec {
     pub fn set_theta_rad(&mut self, theta: f64) -> &mut Self {
         let phi = self.phi_rad();
         let mag = self.mag();
-        let theta = theta;
 
         self.set_x(mag * theta.sin() * phi.cos());
         self.set_y(mag * theta.sin() * phi.sin());
@@ -483,6 +481,20 @@ impl PhysVec {
     pub fn inner_angle_deg(&self, other: &Self) -> f64 {
         self.inner_angle_rad(other) * 180. / PI
     }
+
+    pub fn rotated_around_vec(&self, other: &Self, angle_rad: f64) -> Self {
+        let self_par = self.dot(other) / other.dot(other) * other;
+        let self_perp = self.clone() - &self_par;
+
+        let ortho = other.cross(&self_par);
+
+        let x_1 = angle_rad.cos() / self_perp.mag(); 
+        let x_2 = angle_rad.sin() / ortho.mag(); 
+
+        let rotated_perp = self_perp.mag() * (x_1 * self_perp + x_2 * ortho);
+
+        rotated_perp + self_par
+    }
 }
 
 /// Add two physical vectors together and return the result as a new `PhysVec`
@@ -568,6 +580,17 @@ impl<'a, 'b> Sub<&'b PhysVec> for &'a PhysVec {
         result
     }
 }
+impl<'a, 'b> Sub<&'b PhysVec> for &'a mut PhysVec {
+    type Output = PhysVec;
+    fn sub(self, rhs: &'b PhysVec) -> Self::Output {
+        let mut result = PhysVec::new([0., 0., 0.]);
+        for idx in 0..3 {
+            result.set_by_idx(idx, self.at(idx) - rhs.at(idx));
+        }
+        result
+    }
+}
+
 impl<'a> Sub<&'a PhysVec> for PhysVec {
     type Output = PhysVec;
     fn sub(mut self, rhs: &'a PhysVec) -> Self::Output {
@@ -577,6 +600,17 @@ impl<'a> Sub<&'a PhysVec> for PhysVec {
 }
 
 impl Sub<PhysVec> for &PhysVec {
+    type Output = PhysVec;
+    fn sub(self, rhs: PhysVec) -> Self::Output {
+        let mut result = PhysVec::new([0., 0., 0.]);
+        (0..3).for_each(|idx| {
+            result.set_by_idx(idx, self.at(idx) - rhs.at(idx));
+        });
+        result
+    }
+}
+
+impl Sub<PhysVec> for &mut PhysVec {
     type Output = PhysVec;
     fn sub(self, rhs: PhysVec) -> Self::Output {
         let mut result = PhysVec::new([0., 0., 0.]);
