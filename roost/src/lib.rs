@@ -35,7 +35,6 @@ pub mod hist {
         fn weighted_fill(&self, value_x: f64, value_y: f64, weight: f64);
         fn new_h2d(
             name: String,
-
             title: String,
             bins_x: i64,
             low_x: f64,
