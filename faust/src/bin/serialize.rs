@@ -13,16 +13,17 @@ fn main() {
     let start = std::time::Instant::now();
 
     //let input_files_iter = std::fs::read_dir("K:tamu_data/exp/si28_c_35/ascii/").unwrap();
-    let input_files_iter = std::fs::read_dir("K:tamu_data/exp/o16_c_35/ascii/").unwrap();
+    //let input_files_iter = std::fs::read_dir("K:tamu_data/exp/o16_c_35/ascii/").unwrap();
+    let input_files_iter = std::fs::read_dir("/data/sjygroup/sjy20/bmharvey/acs/c12_si_35/ascii").unwrap();
+    //let input_files_iter = std::fs::read_dir("/data/sjygroup/sjy20/bmharvey/acs/si28_c_35/ascii").unwrap();
     //let input_files_iter = std::fs::read_dir("K:tamu_data/exp/c12_si_35/ascii/").unwrap();
 
-    input_files_iter.par_bridge().for_each(|file| {
+    input_files_iter.for_each(|file| {
         let file = file.unwrap();
         let file_name: String = file.path().to_str().unwrap().into();
         let mut reader = Reader::builder()
             .with_capacity(10_000_000)
             .with_input_file(&file_name)
-            //.with_input_directory("./data/si28_c_35")
             .build();
 
         let input_path = Path::new(&file_name);
@@ -39,7 +40,9 @@ fn main() {
             .to_string()
             + ".rkyv";
 
-        let output_file_name = format!("K:\\tamu_data\\exp\\o16_c_35\\rkyv\\{}", output_file);
+        //let output_file_name = format!("K:\\tamu_data\\exp\\o16_c_35\\rkyv\\{}", output_file);
+        //let output_file_name = format!("/data/sjygroup/sjy20/bmharvey/acs/si28_c_35/rkyv/{}", output_file);
+        let output_file_name = format!("/data/sjygroup/sjy20/bmharvey/acs/c12_si_35/rkyv/{}", output_file);
         //let output_file_name = format!("K:\\tamu_data\\exp\\c12_si_35\\rkyv\\{}", output_file);
         //let output_file_name = format!("K:\\tamu_data\\exp\\si28_c_35\\rkyv\\{}", output_file);
 
@@ -60,7 +63,7 @@ fn main() {
             data_set.add_event(event);
 
             idx += 1;
-            if idx % 100_000 == 0 {
+            if idx % 1_000_000 == 0 {
                 println!("Reading event {} from {}", idx, &file_name.clone());
             }
         }
