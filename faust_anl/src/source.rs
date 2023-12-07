@@ -55,14 +55,14 @@ impl<'a> Source<'a> {
     pub fn charge_number(&self) -> usize {
         self.particles
             .iter()
-            .map(|particle| particle.proton_num() as usize)
+            .map(|particle| particle.proton_num())
             .sum()
     }
 
     pub fn mass_number(&self) -> usize {
         self.particles
             .iter()
-            .map(|particle| particle.mass_num() as usize)
+            .map(|particle| particle.mass_num())
             .sum()
     }
 
@@ -76,8 +76,7 @@ impl<'a> Source<'a> {
 
     #[allow(non_snake_case)]
     pub fn mass_MeV_per_c2(&self) -> f64 {
-        NUCLEAR_DB
-            .nuclear_mass_MeV_per_c2(self.charge_number() as usize, self.mass_number() as usize)
+        NUCLEAR_DB.nuclear_mass_MeV_per_c2(self.charge_number(), self.mass_number())
     }
 
     #[allow(non_snake_case)]
@@ -100,8 +99,10 @@ impl<'a> Source<'a> {
 
     #[allow(non_snake_case)]
     pub fn velocity_c(&self) -> PhysVec {
+        //self.momentum_MeV_per_c()
+        //.as_scaled_by(1. / self.children_mass_sum_MeV_per_c2())
         self.momentum_MeV_per_c()
-            .as_scaled_by(1. / self.children_mass_sum_MeV_per_c2())
+            .as_scaled_by(1. / self.mass_MeV_per_c2())
     }
 
     #[allow(non_snake_case)]
@@ -265,7 +266,6 @@ impl RelativisticSource {
 
     #[allow(non_snake_case)]
     pub fn reconstructed_mass_MeV_per_c2(&self) -> f64 {
-
         NUCLEAR_DB.nuclear_mass_MeV_per_c2(self.proton_number(), self.mass_number())
     }
 
@@ -294,7 +294,6 @@ impl RelativisticSource {
 
     #[allow(non_snake_case)]
     pub fn relative_kinetic_energy_MeV(&self) -> f64 {
-
         self.particles
             .iter()
             .map(|particle| particle.kinetic_energy_MeV())
