@@ -102,8 +102,8 @@ fn main() {
     }
 
     let anl = Anl::<faust::event::Event>::new()
-        .with_input_directory(&format!("K:\\tamu_data\\exp\\{}\\rkyv", args.system))
-        .with_output_directory(&format!("K:\\tamu_data\\exp\\{}\\anl", args.system))
+        .with_input_directory(&format!("/data/sjygroup/sjy20/bmharvey/acs/{}/rkyv", args.system))
+        .with_output_directory(&format!("/data/sjygroup/sjy20/bmharvey/acs/{}/anl", args.system))
         .with_filter(filter)
         .with_filtered_output_size(2_000_000)
         .with_mixed_module(relative_energy_mixed)

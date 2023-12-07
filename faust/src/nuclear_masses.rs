@@ -27,6 +27,7 @@ lazy_static::lazy_static! {
     pub static ref NUCLEAR_DB: NuclearDB = NuclearDB::new();
 }
 
+#[derive(Default)]
 pub struct NuclearDB {
     data: HashMap<(usize, usize), NucleusData>,
 }
