@@ -582,9 +582,12 @@ where
     }
     fn update_mixed_events(attempts: usize, analyzed: usize) {
         println!(
-            "Attempts :  {}  Analyzed :  {}  Failed :  {}",
+            "{}{}{}{}{}{}",
+            "Attempts: ".blue().bold(),
             attempts.to_string().separate_with_underscores(),
+            " Analyzed: ".green().bold(),
             analyzed.to_string().separate_with_underscores(),
+            " Failed: ".red().bold(),
             (attempts - analyzed)
                 .to_string()
                 .separate_with_underscores()
