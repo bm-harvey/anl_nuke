@@ -14,6 +14,7 @@ pub trait AnalysisModule<EventType> {
     fn generate_output(&mut self, _output_directory: &str) {}
 }
 
+#[derive(Default)]
 pub struct AnalysisManager<T> {
     modules: Vec<Box<dyn AnalysisModule<T>>>,
     input_file: Option<String>,

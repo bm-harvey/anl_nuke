@@ -62,7 +62,7 @@ pub trait AnlModule<E> {
 /// events to generate events with certain correlations removed, often for background subracting.
 /// While this framework is more flexible than that goal, that is the original intention behind
 /// this trait.
-pub trait EventMixer<E>
+pub trait EventMixer<E>: Send + Sync
 where
     E: Archive,
 {
@@ -84,7 +84,7 @@ where
 }
 
 /// Often used for creating `EventMixer`s but not always.  
-pub trait EventScrambler<E> {
+pub trait EventScrambler<E>: Send + Sync {
     fn name(&self) -> String;
     fn scramble_event(&mut self, _event: &E, _idx: usize) -> Option<E>;
 }
@@ -99,6 +99,7 @@ impl<E> EventGenerator<E> {
     where
         E: Archive,
         <E as Archive>::Archived: Deserialize<E, rkyv::Infallible>,
+        E: Send + Sync,
     {
         match self {
             EventGenerator::Mixer(mixer) => mixer.mix_events(data_collection, idx),
@@ -350,6 +351,9 @@ where
     <E as Archive>::Archived: Deserialize<E, rkyv::Infallible>,
     <DataSet<E> as Archive>::Archived: Sync,
     E: Sync + Send,
+    dyn EventMixer<E>: Sync + Send,
+    dyn EventScrambler<E>: Sync + Send,
+    //EventGenerator<E>: Sync + Send,
 {
     fn generate_filtered_data(&self, in_dir: &Path, out_dir: &Path) {
         if self.filter.is_none() {
@@ -530,39 +534,81 @@ where
             .for_each(|module| module.initialize(&out_dir));
 
         Anl::make_announcment("EVENT LOOP");
-        let mut event_counter = 0;
-        //let max_events = self.max_mixed_events.unwrap_or(dataset.len());
         let max_events = match self.max_mixed_events {
             MixedEventMaximum::Factor(factor) => (factor * dataset.len() as f64) as usize,
             MixedEventMaximum::Absolute(value) => value,
         };
 
-        for attempt in 0..self.max_attempts {
-            if event_counter >= max_events {
-                break;
-            }
+        let batch_size = Arc::new(Mutex::new(100_000_usize));
+        let target_successes = 100_000;
 
-            let event = self
-                .event_generator
-                .as_mut()
-                .unwrap()
-                .generate_event(dataset, attempt);
+        let mut write_batch = Arc::new(Mutex::new(Vec::<E>::new()));
+        let mut read_batch = Arc::new(Mutex::new(Vec::<E>::new()));
+        let generator = Arc::new(Mutex::new(self.event_generator.as_mut().unwrap()));
 
-            if let Some(event) = event {
-                self.mixed_modules.iter_mut().for_each(|module| {
-                    if module.filter_event(&event, event_counter) {
-                        module.analyze_event(&event, event_counter);
+        let attempt = Arc::new(Mutex::new(0_usize));
+        let analyzed = Arc::new(Mutex::new(0_usize));
+        let prev_batch_attempts = Arc::new(Mutex::new(0_usize));
+        let overall_timer = std::time::Instant::now();
+        let mut timer = std::time::Instant::now();
+        loop {
+            std::mem::swap(&mut read_batch, &mut write_batch);
+
+            std::thread::scope(|s| {
+                let _handle = s.spawn(|| {
+                    let mut batch = write_batch.lock().unwrap();
+                    let mut gen = generator.lock().unwrap();
+                    let bs = *batch_size.lock().unwrap();
+                    batch.clear();
+                    let local_attempt = *attempt.lock().unwrap();
+                    for idx in 0..bs {
+                        let event = gen.generate_event(dataset, local_attempt + idx);
+                        if let Some(e) = event {
+                            batch.push(e);
+                        }
                     }
+                    let success_rate = batch.len() as f64 / bs as f64;
+                    *batch_size.lock().unwrap() = (target_successes as f64 / success_rate) as usize;
+                    *prev_batch_attempts.lock().unwrap() = bs;
                 });
-                event_counter += 1;
+
+                let batch = read_batch.lock().unwrap();
+                let local_events = batch.len();
+                let batch_iter = batch.iter();
+                let mut previously_analyzed = analyzed.lock().unwrap();
+                for (idx, event) in batch_iter.enumerate() {
+                    self.mixed_modules.iter_mut().for_each(|module| {
+                        if module.filter_event(event, *previously_analyzed + idx) {
+                            module.analyze_event(event, *previously_analyzed + idx);
+                        }
+                    });
+                }
+                //drop(batch);
+                *attempt.lock().unwrap() += *prev_batch_attempts.lock().unwrap();
+                *previously_analyzed += local_events;
+            });
+
+            // analyze a batch
+
+            // join
+            //handle.join().unwrap();
+            let time_since_last_s = timer.elapsed().as_secs_f64();
+            if time_since_last_s > 2. {
+                let events_attempts = *attempt.lock().unwrap();
+                let events_analyzed = *analyzed.lock().unwrap();
+                let time_since_last_s = timer.elapsed().as_secs_f64();
+                let overall_time_s = overall_timer.elapsed().as_secs_f64();
+                Anl::update_mixed_events(
+                    events_attempts,
+                    events_analyzed,
+                    time_since_last_s,
+                    overall_time_s,
+                );
+                timer = std::time::Instant::now();
             }
 
-            // Give periodic updates
-            if (attempt + 1) % self.update_interval == 0 || attempt == 0 {
-                Anl::update_mixed_events(attempt + 1, event_counter);
-                self.mixed_modules
-                    .iter_mut()
-                    .for_each(|module| module.report());
+            if *analyzed.lock().unwrap() >= max_events {
+                break;
             }
         }
 
@@ -580,9 +626,11 @@ where
     fn update_real_events(analyzed: usize) {
         println!("Analyzed : {}", analyzed.separate_with_underscores());
     }
-    fn update_mixed_events(attempts: usize, analyzed: usize) {
+    fn update_mixed_events(attempts: usize, analyzed: usize, secs_since_last: f64, overal_time_s: f64) {
         println!(
-            "{}{}{}{}{}{}",
+            "({:.1} | {:.2} s): {}{}{}{}{}{}",
+            overal_time_s,
+            secs_since_last,
             "Attempts: ".blue().bold(),
             attempts.to_string().separate_with_underscores(),
             " Analyzed: ".green().bold(),

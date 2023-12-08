@@ -17,7 +17,7 @@ use roost::hist::{RtH1D, RtH2D};
 
 fn main() {
     let filter =
-        GeneralParticleFilter::new(faust_anl::MatchingPattern::Standard).with_particles(3, 2, 4);
+        GeneralParticleFilter::new(faust_anl::MatchingPattern::Minimum).with_particles(3, 2, 4);
 
     let mut mixer = GeneralParticleMixer::new().with_particles(3, 2, 4);
     mixer.set_faust_filter();
@@ -28,10 +28,10 @@ fn main() {
         .with_filter(filter)
         //.with_event_generator(nukers::anl_module::EventGenerator::Scrambler(Box::new(mixer)))
         .with_event_generator(nukers::anl_module::EventGenerator::Mixer(Box::new(mixer)))
-        .with_real_module(AaaThruBe8gs::new())
-        //.with_mixed_module(AaaThruBe8gs::new())
+        //.with_real_module(AaaThruBe8gs::new())
+        .with_mixed_module(AaaThruBe8gs::new())
         //.with_max_mixed_events(nukers::anl_module::MixedEventMaximum::Absolute(5_000_000))
-        //.with_max_mixed_events(nukers::anl_module::MixedEventMaximum::Absolute(500_000_000))
+        .with_max_mixed_events(nukers::anl_module::MixedEventMaximum::Absolute(1_000_000_000))
         .run();
 }
 
