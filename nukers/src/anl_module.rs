@@ -19,6 +19,20 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+struct Idx {
+    idx: usize,
+}
+
+impl Idx {
+    fn idx(&self) -> usize {
+        self.idx
+    }
+    fn new(idx: usize) -> Self {
+        Self { idx }
+    }
+}
+
 /// The generic form of an event based analysis module. An `Analysis` or `MixedAnalysis` can take in one or more of
 /// these modules and manage the calling of all of these functions for you in a systematic way, or
 /// one could use `AnalysisModule`s on their own right for organizational purposes.
@@ -353,9 +367,8 @@ where
     E: Sync + Send,
     dyn EventMixer<E>: Sync + Send,
     dyn EventScrambler<E>: Sync + Send,
-    //EventGenerator<E>: Sync + Send,
 {
-    fn generate_filtered_data(&self, in_dir: &Path, out_dir: &Path) {
+    fn generate_filtered_indices(&self, in_dir: &Path, out_dir: &Path) {
         if self.filter.is_none() {
             return;
         }
@@ -364,6 +377,56 @@ where
         let memory_maps = Anl::map_data(in_dir);
         let data_collection: DataCollection<<DataSet<E> as Archive>::Archived, E> =
             DataCollection::new(&memory_maps);
+        //let data_collection = DataCollection::new(&memory_maps);
+
+        let max_raw = usize::min(self.max_raw, data_collection.len());
+        let data_collection = Arc::new(RwLock::new(data_collection));
+        let data_set = Arc::new(Mutex::new(DataSet::<usize>::new()));
+        let output_size = self.filtered_output_size;
+
+        let num_found = Arc::new(Mutex::new(0));
+        let file_idx = Arc::new(Mutex::new(0));
+
+        let filter = self.filter.as_ref().unwrap().clone();
+
+        let update_interval = self.update_interval;
+        (0..max_raw).into_par_iter().for_each(|idx| {
+            let event = data_collection.read().unwrap().event_by_idx(idx).unwrap();
+            if filter.read().unwrap().filter_event(&event, 0) {
+                let mut data_set = data_set.lock().unwrap();
+                data_set.add_event(idx);
+                let mut num_found = num_found.lock().unwrap();
+                *num_found += 1;
+                if *num_found % update_interval == 0 {
+                    println!(
+                        "Found {}",
+                        num_found.to_string().separate_with_underscores()
+                    );
+                }
+
+                if data_set.len() >= output_size {
+                    let mut file_idx = file_idx.lock().unwrap();
+                    Anl::generate_filtered_idx_file(*file_idx, out_dir, &mut data_set);
+                    *file_idx += 1;
+                }
+            }
+        });
+
+        let mut data_set = data_set.lock().unwrap();
+        if !data_set.is_empty() {
+            let mut file_idx = file_idx.lock().unwrap();
+            Anl::generate_filtered_idx_file(*file_idx, out_dir, &mut data_set);
+            *file_idx += 1;
+        }
+    }
+    fn generate_filtered_data(&self, in_dir: &Path, out_dir: &Path) {
+        if self.filter.is_none() {
+            return;
+        }
+
+        // Create a data collection for the original data.
+        let memory_maps = Anl::map_data(in_dir);
+        let data_collection = DataCollection::new(&memory_maps);
 
         let max_raw = usize::min(self.max_raw, data_collection.len());
 
@@ -408,6 +471,19 @@ where
             *file_idx += 1;
         }
     }
+    fn generate_filtered_idx_file(file_idx: usize, out_dir: &Path, data_set: &mut DataSet<usize>) {
+        let file_name: String = format!("filtered_{}.idx", file_idx);
+        let out_file_name: String = out_dir.join(file_name).to_str().unwrap().into();
+        println!("Generating file:{}", out_file_name);
+        let out_file = File::create(out_file_name)
+            .expect("A filtered rkyv'ed idx file could not be generated");
+        let mut buffer = BufWriter::new(out_file);
+        buffer
+            .write_all(rkyv::to_bytes::<_, 256>(data_set).unwrap().as_slice())
+            .unwrap();
+        data_set.clear();
+    }
+
     fn generate_filtered_file(file_idx: usize, out_dir: &Path, data_set: &mut DataSet<E>) {
         let file_name: String = format!("filtered_{}.rkyv", file_idx);
         let out_file_name: String = out_dir.join(file_name).to_str().unwrap().into();
@@ -441,20 +517,51 @@ where
                     in_dir.as_path(),
                     filtered_out_dir.as_ref().unwrap().as_path(),
                 );
+                self.generate_filtered_indices(
+                    in_dir.as_path(),
+                    filtered_out_dir.as_ref().unwrap().as_path(),
+                );
             }
             Anl::map_data(filtered_out_dir.as_ref().unwrap())
         } else {
             Anl::map_data(in_dir.as_path())
         };
 
-        let dataset: ArchivedData<E> = DataCollection::new(&mem_mapped_files);
+        let mem_mapped_idx_files = if self.filter_manually_set {
+            // If a filter was set, a filtered_out_dir should be `Some`.
+            if !(self.use_existing && filtered_out_dir.as_ref().unwrap().is_dir()) {
+                if filtered_out_dir.as_ref().unwrap().is_dir() {
+                    std::fs::remove_dir_all(filtered_out_dir.as_ref().unwrap()).unwrap();
+                }
+
+                std::fs::create_dir(filtered_out_dir.as_ref().unwrap())
+                    .expect("Filtered data direcory could not be created");
+
+                self.generate_filtered_data(
+                    in_dir.as_path(),
+                    filtered_out_dir.as_ref().unwrap().as_path(),
+                );
+                self.generate_filtered_indices(
+                    in_dir.as_path(),
+                    filtered_out_dir.as_ref().unwrap().as_path(),
+                );
+            }
+            Anl::map_idx_data(filtered_out_dir.as_ref().unwrap())
+        } else {
+            Anl::map_idx_data(in_dir.as_path())
+        };
+
+        let data_set: ArchivedData<E> = DataCollection::new(&mem_mapped_files);
+        let idx_set: DataCollection<<Idx as Archive>::Archived, Idx> =
+            DataCollection::new(&mem_mapped_idx_files);
 
         if self.should_run_real_analysis() {
-            self.run_real_analysis(&dataset, real_out_dir.unwrap());
+            //self.run_real_analysis(&idx_set, real_out_dir.unwrap());
+            //self.run_real_analysis(&data_set, real_out_dir.unwrap());
         }
 
         if self.should_run_mixed_analysis() {
-            self.run_mixed_analysis(&dataset, mixed_out_dir.unwrap());
+            self.run_mixed_analysis(&data_set, mixed_out_dir.unwrap());
         }
 
         if self.filter_manually_set && self.delete_filtered_data_dir && !self.use_existing {
@@ -721,6 +828,32 @@ where
 
             let length = path_name.len();
             if !path_name[length - 5..].contains(".rkyv") {
+                // if the file is not marked as an rkyv file, don't try to read it as one
+                continue;
+            }
+
+            let input_file = File::open(path_name).expect("File could not be found");
+
+            let memory_map =
+                unsafe { Mmap::map(&input_file).expect("Input file could not be memory mapped") };
+            mmaps.push(memory_map);
+        }
+
+        mmaps
+    }
+    pub fn map_idx_data(directory: &Path) -> Vec<Mmap> {
+        let mut mmaps = Vec::new();
+
+        let paths = std::fs::read_dir(directory).expect("problem opening input directory");
+        for path in paths {
+            let path = path.expect("Ivalid path").path();
+
+            let path_name = path
+                .to_str()
+                .expect("Path could not be interpretted as str");
+
+            let length = path_name.len();
+            if !path_name[length - 4..].contains(".idx") {
                 // if the file is not marked as an rkyv file, don't try to read it as one
                 continue;
             }
