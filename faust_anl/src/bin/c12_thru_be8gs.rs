@@ -9,7 +9,7 @@ use faust_anl::{general_particle_selection::ParticleSelectionRule, GeneralPartic
 use itertools::Itertools;
 use nukers::anl_module::{Anl, AnlModule};
 use rand::seq::SliceRandom;
-
+use nukers::anl_module::MixedEventMaximum;
 use cxx::SharedPtr;
 use faust::nuclear_masses::NUCLEAR_DB;
 use roost::hist::{RtH1D, RtH2D};
@@ -19,8 +19,9 @@ fn main() {
     let filter =
         GeneralParticleFilter::new(faust_anl::MatchingPattern::Minimum).with_particles(3, 2, 4);
 
+    #[allow(unused_mut)]
     let mut mixer = GeneralParticleMixer::new().with_particles(3, 2, 4);
-    mixer.set_faust_filter();
+    //mixer.set_faust_filter();
 
     Anl::new()
         .with_input_directory("/data/sjygroup/sjy20/bmharvey/acs/c12_si_35/rkyv")
@@ -28,10 +29,10 @@ fn main() {
         .with_filter(filter)
         //.with_event_generator(nukers::anl_module::EventGenerator::Scrambler(Box::new(mixer)))
         .with_event_generator(nukers::anl_module::EventGenerator::Mixer(Box::new(mixer)))
-        //.with_real_module(AaaThruBe8gs::new())
-        .with_mixed_module(AaaThruBe8gs::new())
+        .with_real_module(AaaThruBe8gs::new().with_kinematic_gate(15.))
+        .with_mixed_module(AaaThruBe8gs::new().with_kinematic_gate(15.))
         //.with_max_mixed_events(nukers::anl_module::MixedEventMaximum::Absolute(5_000_000))
-        .with_max_mixed_events(nukers::anl_module::MixedEventMaximum::Absolute(1_000_000_000))
+        .with_max_mixed_events(MixedEventMaximum::Absolute(20_000_000))
         .run();
 }
 
@@ -56,7 +57,8 @@ struct AaaThruBe8gs {
 
     phi_theta_1_3m: SharedPtr<RtH2D>,
     phi_theta_2_3m: SharedPtr<RtH2D>,
-    phi_theta_0p: SharedPtr<RtH2D>,
+    phi_theta_1_0p: SharedPtr<RtH2D>,
+    phi_theta_2_0p: SharedPtr<RtH2D>,
     phi_theta_high_ex: SharedPtr<RtH2D>,
 
     e_ex_3_vs_theta: SharedPtr<RtH2D>,
@@ -65,10 +67,11 @@ struct AaaThruBe8gs {
     e_ex_3_vs_theta_thru_0p: SharedPtr<RtH2D>,
     e_ex_2_vs_theta: SharedPtr<RtH2D>,
 
+    c12_vperp_vs_vpar: SharedPtr<RtH2D>,
+
     missing_energy_gate: f64,
 }
 
-//#[rustfmt::skip]
 impl AaaThruBe8gs {
     fn new() -> Self {
         Self {
@@ -89,13 +92,15 @@ impl AaaThruBe8gs {
             #[rustfmt::skip]
             e_missing_v_e_ex: roost::hist::new_h2d( String::from("e_missing_v_e_ex"), String::from(";E^{*} [MeV];E_{missing} [MeV]"), 256, -2., 100., 256, -2., 500.,),
             #[rustfmt::skip]
-            phi_theta_1_3m: roost::hist::new_h2d( String::from("phi_theta_1_3m"), String::from(";#theta [deg];#phi [deg]"), 90, 0., 180., 90, 0., 360.,),
+            phi_theta_1_3m: roost::hist::new_h2d( String::from("phi_theta_1_3m"), String::from(";#theta [deg];#phi [deg]"), 90, 0., 180., 90, 0., 180.,),
             #[rustfmt::skip]
-            phi_theta_2_3m: roost::hist::new_h2d( String::from("phi_theta_2_3m"), String::from(";#theta [deg];#phi [deg]"), 90, 0., 180., 90, 0., 360.,),
+            phi_theta_2_3m: roost::hist::new_h2d( String::from("phi_theta_2_3m"), String::from(";#theta [deg];#phi [deg]"), 90, 0., 180., 90, 0., 180.,),
             #[rustfmt::skip]
-            phi_theta_high_ex: roost::hist::new_h2d( String::from("phi_theta_high_ex"), String::from(";#theta [deg];#phi [deg]"), 90, 0., 180., 90, 0., 360.,),
+            phi_theta_high_ex: roost::hist::new_h2d( String::from("phi_theta_high_ex"), String::from(";#theta [deg];#phi [deg]"), 90, 0., 180., 90, 0., 180.,),
             #[rustfmt::skip]
-            phi_theta_0p: roost::hist::new_h2d( String::from("phi_theta_0p"), String::from(";#theta [deg];#phi [deg]"), 90, 0., 180., 90, 0., 360.,),
+            phi_theta_1_0p: roost::hist::new_h2d( String::from("phi_theta_1_0p"), String::from(";#theta [deg];#phi [deg]"), 90, 0., 180., 90, 0., 180.,),
+            #[rustfmt::skip]
+            phi_theta_2_0p: roost::hist::new_h2d( String::from("phi_theta_2_0p"), String::from(";#theta [deg];#phi [deg]"), 90, 0., 180., 90, 0., 180.,),
             #[rustfmt::skip]
             e_ex_3_vs_theta_thru_0p: roost::hist::new_h2d( String::from("ex_3_vs_theta_through_0p"), String::from(";#theta [deg];E^{*} [MeV]"), 180, 0., 180., 512, -2., 100.,),
             #[rustfmt::skip]
@@ -122,40 +127,62 @@ impl AaaThruBe8gs {
             e_ex_thru_be_2p: roost::hist::new_h1d( String::from("e_ex_thru_be_2p"), String::from("Through {}^{8}Be (2+);E^{*} [MeV];Yield"), 4_096 * 2, -2., 100.,),
             #[rustfmt::skip]
             e_ex_2_v_3: roost::hist::new_h2d( String::from("e_ex_2_v_3"), String::from(";#alpha#alpha#alpha E^{*} [MeV];#alpha#alpha E^{*} [MeV]"), 1_024, -2., 100., 1_024, -2., 100.,),
+            #[rustfmt::skip]
+            c12_vperp_vs_vpar: roost::hist::new_h2d(String::from("c12_vperp_v_vpar"), String::from("Reconstructed ^{12}C*;#vec{v}_{#perp};#vec{v}_{#par}"), 256, -0.5, 0.5, 256, -0.5, 0.5),
         }
     }
 
     #[allow(dead_code)]
     fn angles_method_1(c12: &Source, alpha: &Particle) -> (f64, f64) {
+        let beam: PhysVec = PhysVec::from_cartesian(0., 0., 1.);
+
+        let vel_c12_lab = c12.velocity_c();
+        let vel_alpha_c_frame = &alpha.classical_velocity_c() - &vel_c12_lab;
+
+        let theta = vel_alpha_c_frame.inner_angle_rad(&beam);
+
+        let phi = {
+            let ortho = beam.cross(&vel_c12_lab);
+            //let ortho_comp = &vel_alpha_c_frame - vel_alpha_c_frame.mag() * theta.cos() * &beam;
+            let ortho_comp = vel_alpha_c_frame.perpindicular_wrt(&beam);
+
+            //println!("{}", ortho.mag());
+            ortho_comp.inner_angle_rad(&ortho)
+        };
+
+        (theta.to_degrees(), phi.to_degrees())
+    }
+
+    #[allow(dead_code)]
+    fn angles_method_2(c12: &Source, alpha: &Particle) -> (f64, f64) {
         let beam = PhysVec::from_cartesian(0., 0., 1.);
 
         let vel_c12_lab = c12.velocity_c();
         let vel_alpha_c_frame = &alpha.classical_velocity_c() - &vel_c12_lab;
         let ortho = beam.cross(&vel_c12_lab);
-        let theta = { ortho.inner_angle_deg(&vel_alpha_c_frame) };
+        let theta = { ortho.inner_angle_rad(&vel_alpha_c_frame) };
 
         let phi = {
-            let projected_vel_alpha =
-                ortho.as_normalized_to(vel_alpha_c_frame.mag() * theta.to_radians().cos());
+            let projected_vel_alpha = ortho.as_normalized_to(vel_alpha_c_frame.mag() * theta.cos());
 
             let transverse_alpha_vel = &vel_alpha_c_frame - &projected_vel_alpha;
 
-            let phi = beam.inner_angle_deg(&transverse_alpha_vel);
+            beam.inner_angle_deg(&transverse_alpha_vel)
             //let phi = vel_c12_lab.inner_angle_deg(&beam);
 
-            if beam.dot(&vel_c12_lab.cross(&transverse_alpha_vel)) < 0. {
-                //if vel_c12_lab.dot(&vel_c12_lab.cross(&beam)) < 0. {
-                phi
-            } else {
-                360. - phi
-            }
+            //if beam.dot(&vel_c12_lab.cross(&transverse_alpha_vel)) < 0. {
+            ////if vel_c12_lab.dot(&vel_c12_lab.cross(&beam)) < 0. {
+            //phi
+            //} else {
+            //360. - phi
+            //}
         };
 
-        (theta, phi)
+        (theta.to_degrees(), phi)
     }
 
     #[allow(dead_code)]
-    fn angles_method_2(c12: &Source, alpha: &Particle) -> (f64, f64) {
+    fn angles_method_3(c12: &Source, alpha: &Particle) -> (f64, f64) {
         //let c12 = c12.relativistic_source();
         let mut alpha = alpha.clone();
         let vel_alpha_lab_frame = alpha.classical_velocity_c();
@@ -217,7 +244,7 @@ impl AaaThruBe8gs {
             beam_kinetic_energy - e_ex - si28x_kinetic_energy - c12x_kinetic_energy;
         self.e_missing_v_e_ex.fill(e_ex, missing_energy);
 
-        missing_energy < 50.
+        missing_energy < self.missing_energy_gate
     }
 
     #[allow(dead_code)]
@@ -245,10 +272,19 @@ impl AnlModule<Event> for AaaThruBe8gs {
         for source_3a in combo_iter {
             let source_3a_rel = source_3a.relativistic_source();
             let e_ex = source_3a_rel.excitation_energy_MeV();
-
             if !self.kinematically_accept_c12(&source_3a_rel) {
                 continue;
             }
+
+            let v = source_3a.velocity_c();
+            let v_perp = v.parallel();
+            let v_trans = if v.y() > 0. {
+                v.transverse()
+            } else {
+                -v.transverse()
+            };
+
+            self.c12_vperp_vs_vpar.fill(v_perp, v_trans);
 
             self.e_ex.fill(e_ex);
 
@@ -271,19 +307,23 @@ impl AnlModule<Event> for AaaThruBe8gs {
                         self.phi_theta_1_3m.fill(theta, phi);
                     }
                     if c12_is_0p {
-                        self.phi_theta_0p.fill(theta, phi);
+                        self.phi_theta_1_0p.fill(theta, phi);
                     }
                     if c12_is_high_energy {
                         self.phi_theta_high_ex.fill(theta, phi);
                     }
+
                     let (theta, phi) = Self::angles_method_2(&source_3a, alpha);
                     if c12_is_3m {
                         self.phi_theta_2_3m.fill(theta, phi);
                     }
+                    if c12_is_0p {
+                        self.phi_theta_2_0p.fill(theta, phi);
+                    }
 
-                    self.e_ex_2a_be8gs_fills_once.fill(be8.excitation_energy_MeV());
+                    self.e_ex_2a_be8gs_fills_once
+                        .fill(be8.excitation_energy_MeV());
                     be8gs_found = true;
-
 
                     self.e_ex_3_vs_theta_thru_0p.fill(theta, e_ex);
                     self.e_ex_2a_thru_be8_any.fill(be8.excitation_energy_MeV());
@@ -396,6 +436,7 @@ impl AnlModule<Event> for AaaThruBe8gs {
         println!("Creating output file: {}", file_name);
         let file = roost::file::create(file_name);
         self.e_ex.write();
+        self.c12_vperp_vs_vpar.write();
         self.e_missing_v_e_ex.write();
         self.e_ex_2a.write();
         self.e_ex_2a_be8gs_fills_once.write();
@@ -416,7 +457,8 @@ impl AnlModule<Event> for AaaThruBe8gs {
         self.e_ex_2_vs_theta.write();
         self.phi_theta_1_3m.write();
         self.phi_theta_2_3m.write();
-        self.phi_theta_0p.write();
+        self.phi_theta_1_0p.write();
+        self.phi_theta_2_0p.write();
         self.phi_theta_high_ex.write();
 
         self.e_ex_2_v_3.write();

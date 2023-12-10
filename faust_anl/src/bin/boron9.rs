@@ -1,21 +1,36 @@
+use cxx::SharedPtr;
 use faust::event::Event;
+use faust_anl::general_particle_selection::GeneralParticleFilter;
+use faust_anl::general_particle_selection::GeneralParticleMixer;
 use faust_anl::general_particle_selection::ParticleSelectionRule;
 use faust_anl::relative_energy::AllCombinationsIter;
 use faust_anl::source::Source;
+use nukers::anl_module::EventGenerator::Mixer;
+use nukers::anl_module::MixedEventMaximum;
 use nukers::anl_module::{Anl, AnlModule};
-
-use cxx::SharedPtr;
 use rand::seq::SliceRandom;
 use roost::hist::RtH1D;
 
 fn main() {
+    let filter = GeneralParticleFilter::new(faust_anl::MatchingPattern::Minimum)
+        .with_particles(2, 2, 4)
+        .with_particles(1, 1, 1);
+
+    #[allow(unused_mut)]
+    #[allow(unused_variables)]
+    let mut mixer = GeneralParticleMixer::new()
+        .with_particles(2, 2, 4)
+        .with_particles(1, 1, 1);
+    //mixer.set_faust_filter();
+
     Anl::new()
-        //.with_input_directory("K:\\tamu_data\\exp\\si28_c_35\\rkyv")
-        //.with_output_directory("K:\\tamu_data\\exp\\si28_c_35\\anl")
-        .with_input_directory("K:\\tamu_data\\exp\\c12_si_35\\rkyv")
-        .with_output_directory("K:\\tamu_data\\exp\\c12_si_35\\anl")
+        .with_filter(filter)
+        .with_input_directory("/data/sjygroup/sjy20/bmharvey/acs/c12_si_35/rkyv")
+        .with_output_directory("/data/sjygroup/sjy20/bmharvey/acs/c12_si_35/anl")
         .with_real_module(PaaThruBe8gs::new())
-        //.with_max_real_events(10_000_000)
+        .with_event_generator(Mixer(Box::new(mixer)))
+        .with_mixed_module(PaaThruBe8gs::new())
+        .with_max_mixed_events(MixedEventMaximum::Absolute(1_800_000))
         .run();
 }
 
@@ -24,6 +39,7 @@ struct PaaThruBe8gs {
     e_ex: SharedPtr<RtH1D>,
     e_ex_thru_be8gs: SharedPtr<RtH1D>,
     e_ex_thru_li5gs: SharedPtr<RtH1D>,
+    e_ex_aa: SharedPtr<RtH1D>,
     e_ex_pa_min: SharedPtr<RtH1D>,
     e_ex_pa_max: SharedPtr<RtH1D>,
     theta: SharedPtr<RtH1D>,
@@ -38,48 +54,20 @@ impl PaaThruBe8gs {
 
         Self {
             rules,
-            e_ex: roost::hist::new_h1d(
-                String::from("e_ex"),
-                String::from(";E_{x} [MeV];Yield"),
-                4_096,
-                -2.,
-                30.,
-            ),
-            theta: roost::hist::new_h1d(
-                String::from("theta"),
-                String::from(";#theta [deg];Yield"),
-                1_024,
-                0.,
-                180.,
-            ),
-            e_ex_thru_be8gs: roost::hist::new_h1d(
-                String::from("e_ex_thru_be8gs"),
-                String::from(";E_{x} [MeV];Yield"),
-                4_096,
-                -2.,
-                30.,
-            ),
-            e_ex_pa_min: roost::hist::new_h1d(
-                String::from("e_ex_pa_min"),
-                String::from(";E_{x} [MeV];Yield"),
-                4_096,
-                -2.,
-                30.,
-            ),
-            e_ex_pa_max: roost::hist::new_h1d(
-                String::from("e_ex_pa_max"),
-                String::from(";E_{x} [MeV];Yield"),
-                4_096,
-                -2.,
-                30.,
-            ),
-            e_ex_thru_li5gs: roost::hist::new_h1d(
-                String::from("e_ex_thru_li5gs"),
-                String::from(";E_{x} [MeV];Yield"),
-                4_096,
-                -2.,
-                30.,
-            ),
+            #[rustfmt::skip]
+            e_ex: roost::hist::new_h1d( String::from("e_ex"), String::from(";E_{x} [MeV];Yield"), 4_096, -2., 30.,),
+            #[rustfmt::skip]
+            theta: roost::hist::new_h1d( String::from("theta"), String::from(";#theta [deg];Yield"), 1_024, 0., 180.,),
+            #[rustfmt::skip]
+            e_ex_thru_be8gs: roost::hist::new_h1d( String::from("e_ex_thru_be8gs"), String::from(";E_{x} [MeV];Yield"), 4_096, -2., 30.,),
+            #[rustfmt::skip]
+            e_ex_pa_min: roost::hist::new_h1d( String::from("e_ex_pa_min"), String::from(";E_{x} [MeV];Yield"), 4_096, -2., 30.,),
+            #[rustfmt::skip]
+            e_ex_pa_max: roost::hist::new_h1d( String::from("e_ex_pa_max"), String::from(";E_{x} [MeV];Yield"), 4_096, -2., 30.,),
+            #[rustfmt::skip]
+            e_ex_aa: roost::hist::new_h1d( String::from("e_ex_aa"), String::from(";E_{x} [MeV];Yield"), 4_096, -2., 30.,),
+            #[rustfmt::skip]
+            e_ex_thru_li5gs: roost::hist::new_h1d( String::from("e_ex_thru_li5gs"), String::from(";E_{x} [MeV];Yield"), 4_096, -2., 30.,),
         }
     }
 }
@@ -94,7 +82,7 @@ impl AnlModule<Event> for PaaThruBe8gs {
             return;
         }
 
-        let combo_iter = AllCombinationsIter::new(&self.rules, &event);
+        let combo_iter = AllCombinationsIter::new(&self.rules, event);
 
         for combo in combo_iter {
             let ex = combo.excitation_energy_MeV();
@@ -110,7 +98,10 @@ impl AnlModule<Event> for PaaThruBe8gs {
             for particle in alphas.iter() {
                 source_2a.add_particle(particle);
             }
+
             let e_rel_2a = source_2a.relative_kinetic_energy_MeV();
+
+            self.e_ex_aa.fill(e_rel_2a);
 
             let mut source_pa = Source::new();
             let li5gs = alphas.iter().any(|&particle| {
@@ -160,7 +151,7 @@ impl AnlModule<Event> for PaaThruBe8gs {
 
             self.e_ex.fill(ex);
 
-            if 2. < ex && ex < 3. {
+            if (2.0..3.0).contains(&ex) {
                 let pa_e_rel = alphas
                     .iter()
                     .map(|alpha| {
@@ -200,6 +191,7 @@ impl AnlModule<Event> for PaaThruBe8gs {
         let file = roost::file::create(file_name);
         self.e_ex.write();
         self.e_ex_pa_max.write();
+        self.e_ex_aa.write();
         self.e_ex_pa_min.write();
         self.theta.write();
         self.e_ex_thru_be8gs.write();

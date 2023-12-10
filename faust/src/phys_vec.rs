@@ -488,12 +488,24 @@ impl PhysVec {
 
         let ortho = other.cross(&self_par);
 
-        let x_1 = angle_rad.cos() / self_perp.mag(); 
-        let x_2 = angle_rad.sin() / ortho.mag(); 
+        let x_1 = angle_rad.cos() / self_perp.mag();
+        let x_2 = angle_rad.sin() / ortho.mag();
 
         let rotated_perp = self_perp.mag() * (x_1 * self_perp + x_2 * ortho);
 
         rotated_perp + self_par
+    }
+
+    pub fn projected_onto(&self, other: &Self) -> Self {
+        self.mag() * self.inner_angle_rad(other).cos() * other
+    }
+
+    pub fn parallel_wrt(&self, other: &Self) -> Self {
+        self.projected_onto(other)
+    }
+
+    pub fn perpindicular_wrt(&self, other: &Self) -> Self {
+        self - self.projected_onto(other)
     }
 }
 

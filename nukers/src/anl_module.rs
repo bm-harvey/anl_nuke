@@ -427,7 +427,6 @@ where
         let (in_dir, real_out_dir, mixed_out_dir, filtered_out_dir) = self.manage_output_paths();
 
         // Generate data set
-
         let mem_mapped_files = if self.filter_manually_set {
             // If a filter was set, a filtered_out_dir should be `Some`.
             if !(self.use_existing && filtered_out_dir.as_ref().unwrap().is_dir()) {
@@ -583,15 +582,10 @@ where
                         }
                     });
                 }
-                //drop(batch);
                 *attempt.lock().unwrap() += *prev_batch_attempts.lock().unwrap();
                 *previously_analyzed += local_events;
             });
 
-            // analyze a batch
-
-            // join
-            //handle.join().unwrap();
             let time_since_last_s = timer.elapsed().as_secs_f64();
             if time_since_last_s > 2. {
                 let events_attempts = *attempt.lock().unwrap();
@@ -626,7 +620,12 @@ where
     fn update_real_events(analyzed: usize) {
         println!("Analyzed : {}", analyzed.separate_with_underscores());
     }
-    fn update_mixed_events(attempts: usize, analyzed: usize, secs_since_last: f64, overal_time_s: f64) {
+    fn update_mixed_events(
+        attempts: usize,
+        analyzed: usize,
+        secs_since_last: f64,
+        overal_time_s: f64,
+    ) {
         println!(
             "({:.1} | {:.2} s): {}{}{}{}{}{}",
             overal_time_s,
@@ -635,7 +634,7 @@ where
             attempts.to_string().separate_with_underscores(),
             " Analyzed: ".green().bold(),
             analyzed.to_string().separate_with_underscores(),
-            " Failed: ".red().bold(),
+            " Rejected: ".red().bold(),
             (attempts - analyzed)
                 .to_string()
                 .separate_with_underscores()
@@ -643,7 +642,7 @@ where
     }
 
     fn make_announcment(text: &str) {
-        let s = format!("[[ {} ]]", text).blue();
+        let s = format!("[[ {} ]]", text).blue().bold();
         println!("{}", s);
     }
     fn manage_output_paths(&self) -> (PathBuf, Option<PathBuf>, Option<PathBuf>, Option<PathBuf>) {
