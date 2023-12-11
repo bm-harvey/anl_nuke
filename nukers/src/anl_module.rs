@@ -1,6 +1,8 @@
 use crate::data_set::{ArchivedData, DataCollection, DataSet};
 use colored::Colorize;
+use indicatif::ParallelProgressIterator;
 use memmap2::Mmap;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::prelude::*;
 use rkyv::ser::serializers::{
     AlignedSerializer, AllocScratch, CompositeSerializer, FallbackScratch, HeapScratch,
@@ -18,20 +20,6 @@ use std::{
     fs::File,
     path::{Path, PathBuf},
 };
-
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-struct Idx {
-    idx: usize,
-}
-
-impl Idx {
-    fn idx(&self) -> usize {
-        self.idx
-    }
-    fn new(idx: usize) -> Self {
-        Self { idx }
-    }
-}
 
 /// The generic form of an event based analysis module. An `Analysis` or `MixedAnalysis` can take in one or more of
 /// these modules and manage the calling of all of these functions for you in a systematic way, or
@@ -369,6 +357,8 @@ where
     dyn EventScrambler<E>: Sync + Send,
 {
     fn generate_filtered_indices(&self, in_dir: &Path, out_dir: &Path) {
+        println!("{}", out_dir.to_str().unwrap());
+        let timer = std::time::Instant::now();
         if self.filter.is_none() {
             return;
         }
@@ -382,97 +372,31 @@ where
         let max_raw = usize::min(self.max_raw, data_collection.len());
         let data_collection = Arc::new(RwLock::new(data_collection));
         let data_set = Arc::new(Mutex::new(DataSet::<usize>::new()));
-        let output_size = self.filtered_output_size;
+        //let output_size = self.filtered_output_size;
 
         let num_found = Arc::new(Mutex::new(0));
-        let file_idx = Arc::new(Mutex::new(0));
 
         let filter = self.filter.as_ref().unwrap().clone();
 
-        let update_interval = self.update_interval;
-        (0..max_raw).into_par_iter().for_each(|idx| {
+        //let update_interval = self.update_interval;
+        (0..max_raw).into_par_iter().progress().for_each(|idx| {
             let event = data_collection.read().unwrap().event_by_idx(idx).unwrap();
             if filter.read().unwrap().filter_event(&event, 0) {
                 let mut data_set = data_set.lock().unwrap();
                 data_set.add_event(idx);
                 let mut num_found = num_found.lock().unwrap();
                 *num_found += 1;
-                if *num_found % update_interval == 0 {
-                    println!(
-                        "Found {}",
-                        num_found.to_string().separate_with_underscores()
-                    );
-                }
-
-                if data_set.len() >= output_size {
-                    let mut file_idx = file_idx.lock().unwrap();
-                    Anl::generate_filtered_idx_file(*file_idx, out_dir, &mut data_set);
-                    *file_idx += 1;
-                }
             }
         });
 
         let mut data_set = data_set.lock().unwrap();
-        if !data_set.is_empty() {
-            let mut file_idx = file_idx.lock().unwrap();
-            Anl::generate_filtered_idx_file(*file_idx, out_dir, &mut data_set);
-            *file_idx += 1;
-        }
+
+        println!("time to filter = {} s", timer.elapsed().as_secs());
+        Anl::generate_filtered_idx_file(out_dir, &mut data_set)
+
     }
-    fn generate_filtered_data(&self, in_dir: &Path, out_dir: &Path) {
-        if self.filter.is_none() {
-            return;
-        }
-
-        // Create a data collection for the original data.
-        let memory_maps = Anl::map_data(in_dir);
-        let data_collection = DataCollection::new(&memory_maps);
-
-        let max_raw = usize::min(self.max_raw, data_collection.len());
-
-        let data_collection = Arc::new(RwLock::new(data_collection));
-
-        let data_set = Arc::new(Mutex::new(DataSet::<E>::new()));
-
-        let output_size = self.filtered_output_size;
-
-        let num_found = Arc::new(Mutex::new(0));
-        let file_idx = Arc::new(Mutex::new(0));
-
-        let filter = self.filter.as_ref().unwrap().clone();
-
-        let update_interval = self.update_interval;
-        (0..max_raw).into_par_iter().for_each(|idx| {
-            let event = data_collection.read().unwrap().event_by_idx(idx).unwrap();
-            if filter.read().unwrap().filter_event(&event, 0) {
-                let mut data_set = data_set.lock().unwrap();
-                data_set.add_event(event);
-                let mut num_found = num_found.lock().unwrap();
-                *num_found += 1;
-                if *num_found % update_interval == 0 {
-                    println!(
-                        "Found {}",
-                        num_found.to_string().separate_with_underscores()
-                    );
-                }
-
-                if data_set.len() >= output_size {
-                    let mut file_idx = file_idx.lock().unwrap();
-                    Anl::generate_filtered_file(*file_idx, out_dir, &mut data_set);
-                    *file_idx += 1;
-                }
-            }
-        });
-
-        let mut data_set = data_set.lock().unwrap();
-        if !data_set.is_empty() {
-            let mut file_idx = file_idx.lock().unwrap();
-            Anl::generate_filtered_file(*file_idx, out_dir, &mut data_set);
-            *file_idx += 1;
-        }
-    }
-    fn generate_filtered_idx_file(file_idx: usize, out_dir: &Path, data_set: &mut DataSet<usize>) {
-        let file_name: String = format!("filtered_{}.idx", file_idx);
+    fn generate_filtered_idx_file(out_dir: &Path, data_set: &mut DataSet<usize>) {
+        let file_name: String = String::from("idx.rkyv");
         let out_file_name: String = out_dir.join(file_name).to_str().unwrap().into();
         println!("Generating file:{}", out_file_name);
         let out_file = File::create(out_file_name)
@@ -484,18 +408,6 @@ where
         data_set.clear();
     }
 
-    fn generate_filtered_file(file_idx: usize, out_dir: &Path, data_set: &mut DataSet<E>) {
-        let file_name: String = format!("filtered_{}.rkyv", file_idx);
-        let out_file_name: String = out_dir.join(file_name).to_str().unwrap().into();
-        println!("Generating file:{}", out_file_name);
-        let out_file =
-            File::create(out_file_name).expect("A filtered rkyv file could not be generated");
-        let mut buffer = BufWriter::new(out_file);
-        buffer
-            .write_all(rkyv::to_bytes::<_, 256>(data_set).unwrap().as_slice())
-            .unwrap();
-        data_set.clear();
-    }
     pub fn run(&mut self) {
         // Manage directories
 
@@ -503,60 +415,38 @@ where
         let (in_dir, real_out_dir, mixed_out_dir, filtered_out_dir) = self.manage_output_paths();
 
         // Generate data set
-        let mem_mapped_files = if self.filter_manually_set {
-            // If a filter was set, a filtered_out_dir should be `Some`.
-            if !(self.use_existing && filtered_out_dir.as_ref().unwrap().is_dir()) {
-                if filtered_out_dir.as_ref().unwrap().is_dir() {
-                    std::fs::remove_dir_all(filtered_out_dir.as_ref().unwrap()).unwrap();
+        let mem_mapped_files = Anl::map_data(in_dir.as_path());
+
+        let idx_data = if self.filter_manually_set {
+            if !filtered_out_dir.as_ref().unwrap().join("idx.rkyv").exists() || !self.use_existing {
+                if !filtered_out_dir.as_ref().unwrap().exists() {
+                    std::fs::create_dir(filtered_out_dir.as_ref().unwrap())
+                        .expect("Filtered data direcory could not be created");
                 }
 
-                std::fs::create_dir(filtered_out_dir.as_ref().unwrap())
-                    .expect("Filtered data direcory could not be created");
-
-                self.generate_filtered_data(
-                    in_dir.as_path(),
-                    filtered_out_dir.as_ref().unwrap().as_path(),
-                );
                 self.generate_filtered_indices(
                     in_dir.as_path(),
                     filtered_out_dir.as_ref().unwrap().as_path(),
                 );
             }
-            Anl::map_data(filtered_out_dir.as_ref().unwrap())
+
+            let idx_path = filtered_out_dir.as_ref().unwrap().join("idx.rkyv");
+            let idx_path = idx_path.as_path();
+
+            Some(indices(idx_path))
         } else {
-            Anl::map_data(in_dir.as_path())
+            None
         };
 
-        let mem_mapped_idx_files = if self.filter_manually_set {
-            // If a filter was set, a filtered_out_dir should be `Some`.
-            if !(self.use_existing && filtered_out_dir.as_ref().unwrap().is_dir()) {
-                if filtered_out_dir.as_ref().unwrap().is_dir() {
-                    std::fs::remove_dir_all(filtered_out_dir.as_ref().unwrap()).unwrap();
-                }
-
-                std::fs::create_dir(filtered_out_dir.as_ref().unwrap())
-                    .expect("Filtered data direcory could not be created");
-
-                self.generate_filtered_data(
-                    in_dir.as_path(),
-                    filtered_out_dir.as_ref().unwrap().as_path(),
-                );
-                self.generate_filtered_indices(
-                    in_dir.as_path(),
-                    filtered_out_dir.as_ref().unwrap().as_path(),
-                );
-            }
-            Anl::map_idx_data(filtered_out_dir.as_ref().unwrap())
-        } else {
-            Anl::map_idx_data(in_dir.as_path())
-        };
+        //let idx_map =
+        //unsafe { Mmap::map(&).expect("Input file could not be memory mapped") };
 
         let data_set: ArchivedData<E> = DataCollection::new(&mem_mapped_files);
-        let idx_set: DataCollection<<Idx as Archive>::Archived, Idx> =
-            DataCollection::new(&mem_mapped_idx_files);
+        //let idx_set: DataCollection<<Idx as Archive>::Archived, Idx> =
+        //DataCollection::new(&mem_mapped_idx_files);
 
         if self.should_run_real_analysis() {
-            //self.run_real_analysis(&idx_set, real_out_dir.unwrap());
+            self.run_real_analysis(&data_set, &idx_data, real_out_dir.unwrap());
             //self.run_real_analysis(&data_set, real_out_dir.unwrap());
         }
 
@@ -581,7 +471,13 @@ where
         self.event_generator.is_some() && !self.mixed_modules.is_empty()
     }
 
-    fn run_real_analysis(&mut self, dataset: &ArchivedData<E>, out_dir: PathBuf) {
+    //fn run_real_analysis(&mut self, dataset: &ArchivedData<E>, out_dir: PathBuf) {
+    fn run_real_analysis(
+        &mut self,
+        dataset: &ArchivedData<E>,
+        filtered_indices: &Option<Vec<usize>>,
+        out_dir: PathBuf,
+    ) {
         Anl::make_announcment("INITIALIZE");
         self.real_modules
             .iter_mut()
@@ -593,26 +489,54 @@ where
         Anl::make_announcment("EVENT LOOP");
         let mut event_counter = 0;
         let max_events = self.max_real_events.unwrap_or(dataset.len());
-        for event in dataset.iter() {
-            self.real_modules.iter_mut().for_each(|module| {
-                if module.filter_event(&event, event_counter) {
-                    let start = std::time::Instant::now();
-                    module.analyze_event(&event, event_counter);
-                    time_in_event_s += start.elapsed().as_secs_f64();
+
+        if filtered_indices.is_none() {
+            for event in dataset.iter() {
+                self.real_modules.iter_mut().for_each(|module| {
+                    if module.filter_event(&event, event_counter) {
+                        let start = std::time::Instant::now();
+                        module.analyze_event(&event, event_counter);
+                        time_in_event_s += start.elapsed().as_secs_f64();
+                    }
+                });
+                event_counter += 1;
+
+                // Give periodic updates
+                if event_counter % self.update_interval == 0 || event_counter == 1 {
+                    Anl::update_real_events(event_counter);
+                    self.real_modules
+                        .iter_mut()
+                        .for_each(|module| module.report());
                 }
-            });
-            event_counter += 1;
 
-            // Give periodic updates
-            if event_counter % self.update_interval == 0 || event_counter == 1 {
-                Anl::update_real_events(event_counter);
-                self.real_modules
-                    .iter_mut()
-                    .for_each(|module| module.report());
+                if event_counter >= max_events {
+                    break;
+                }
             }
+        } else {
+            let filtered_indices = filtered_indices.as_ref().unwrap();
+            for idx in filtered_indices.iter() {
+                let event = dataset.event_by_idx(*idx).unwrap();
+                self.real_modules.iter_mut().for_each(|module| {
+                    if module.filter_event(&event, event_counter) {
+                        let start = std::time::Instant::now();
+                        module.analyze_event(&event, event_counter);
+                        time_in_event_s += start.elapsed().as_secs_f64();
+                    }
+                });
+                event_counter += 1;
 
-            if event_counter >= max_events {
-                break;
+                // Give periodic updates
+                if event_counter % self.update_interval == 0 || event_counter == 1 {
+                    Anl::update_real_events(event_counter);
+                    self.real_modules
+                        .iter_mut()
+                        .for_each(|module| module.report());
+                }
+
+                if event_counter >= max_events {
+                    break;
+                }
             }
         }
 
@@ -778,7 +702,7 @@ where
         };
 
         let filtered_out_dir = if self.filter_manually_set {
-            Some(out_dir.join("rkyv"))
+            Some(out_dir.clone())
         } else {
             None
         };
@@ -867,4 +791,21 @@ where
 
         mmaps
     }
+}
+
+fn indices(file: &std::path::Path) -> Vec<usize>
+where
+    <Vec<usize> as Archive>::Archived: rkyv::Deserialize<Vec<usize>, rkyv::Infallible>,
+{
+    //let idx_path = filtered_out_dir.as_ref().unwrap().join("idx.rkyv");
+    let bytes = std::fs::read(file).unwrap();
+
+    let indices: &<Vec<usize> as Archive>::Archived =
+        unsafe { rkyv::archived_root::<Vec<usize>>(&bytes) };
+
+    let indices_2: Vec<usize> = indices
+        .deserialize(&mut rkyv::Infallible)
+        .expect("Deserializing filtered indces failed");
+
+    indices_2
 }

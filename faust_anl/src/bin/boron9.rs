@@ -23,13 +23,16 @@ fn main() {
         .with_particles(1, 1, 1);
     //mixer.set_faust_filter();
 
+    let system = "si28_c_35";
+
     Anl::new()
         .with_filter(filter)
-        .with_input_directory("/data/sjygroup/sjy20/bmharvey/acs/c12_si_35/rkyv")
-        .with_output_directory("/data/sjygroup/sjy20/bmharvey/acs/c12_si_35/anl")
+        .with_input_directory(&format!("/data/sjygroup/sjy20/bmharvey/acs/{}/rkyv", system))
+        .with_output_directory(&format!("/data/sjygroup/sjy20/bmharvey/acs/{}/anl", system))
         .with_real_module(PaaThruBe8gs::new())
         .with_event_generator(Mixer(Box::new(mixer)))
         .with_mixed_module(PaaThruBe8gs::new())
+        .with_update_interval(100_000)
         .with_max_mixed_events(MixedEventMaximum::Absolute(1_800_000))
         .run();
 }
