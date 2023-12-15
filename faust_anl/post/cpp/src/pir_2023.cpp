@@ -14,12 +14,6 @@
 #include <TLine.h>
 #include <TVirtualPad.h>
 
-#include <cmath>
-#include <iostream>
-#include <numeric>
-#include <string>
-#include <vector>
-
 #include "formatting.hpp"
 
 #define PRINTLN std::cout << __LINE__ << std::endl;
@@ -36,10 +30,10 @@ int main() {
     formatting::set_style();
 
     auto file = TFile::Open(
-        "K:\\tamu_data\\exp\\c12_si_35\\anl\\filt_3a_min\\real\\aaa_thru_be8gs.root");
+        "/data/sjygroup/sjy20/bmharvey/acs/c12_si_35/anl/filt_3a_min/real/aaa_thru_be8gs.root");
 
     auto file_m = TFile::Open(
-        "K:\\tamu_data\\exp\\c12_si_35\\anl\\filt_3a_min\\mixed_mix_3a_unique\\aaa_thru_be8gs.root");
+        "/data/sjygroup/sjy20/bmharvey/acs/c12_si_35/anl/filt_3a_min/mixed_mix_3a_unique/aaa_thru_be8gs.root");
 
     auto* e_ex = file->Get<TH1D>("e_ex");
     auto* e_ex_m = file_m->Get<TH1D>("e_ex");
@@ -191,8 +185,8 @@ int main() {
     dalitz_0p->SetMarkerColor(kBlack);
     dalitz_0p->SetMarkerStyle(20);
 
-    auto* cirle = new TEllipse(0, 0, 1. );
-    auto* cirle_in = new TEllipse(0, 0, 0.1 );
+    auto* cirle = new TEllipse(0, 0, 1.);
+    auto* cirle_in = new TEllipse(0, 0, 0.1);
     //auto * cirle  = new TEllipse(0, 0, 1./ 3.);
     cirle->SetFillStyle(0);
     cirle->SetLineColor(kBlack);
@@ -224,8 +218,6 @@ int main() {
     cirle->Draw("same");
     canvas->SaveAs("dalitz_3m.pdf");
     canvas->SaveAs("dalitz_3m.png");
-
-
 
     dalitz_all->SetTitle(
         "^{12}C#rightarrow#alpha#alpha#alpha;#frac{#sqrt{3}}{2}(#varepsilon_{2} - #varepsilon_{1});#frac{1}{2}(2#varepsilon_{3} - #varepsilon_{2} - #varepsilon_{1})");

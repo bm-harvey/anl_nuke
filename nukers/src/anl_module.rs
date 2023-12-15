@@ -1,9 +1,8 @@
 use crate::data_set::{ArchivedData, DataCollection, DataSet};
 use colored::Colorize;
-use indicatif::ParallelProgressIterator;
+use indicatif::{ParallelProgressIterator, ProgressIterator};
 use memmap2::Mmap;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use rayon::prelude::*;
 use rkyv::ser::serializers::{
     AlignedSerializer, AllocScratch, CompositeSerializer, FallbackScratch, HeapScratch,
     SharedSerializeMap,
@@ -491,7 +490,8 @@ where
         let max_events = self.max_real_events.unwrap_or(dataset.len());
 
         if filtered_indices.is_none() {
-            for event in dataset.iter() {
+            for event_idx  in (0..dataset.len()).progress() {
+                let event = dataset.event_by_idx(event_idx).unwrap();
                 self.real_modules.iter_mut().for_each(|module| {
                     if module.filter_event(&event, event_counter) {
                         let start = std::time::Instant::now();
@@ -503,7 +503,7 @@ where
 
                 // Give periodic updates
                 if event_counter % self.update_interval == 0 || event_counter == 1 {
-                    Anl::update_real_events(event_counter);
+                    //Anl::update_real_events(event_counter);
                     self.real_modules
                         .iter_mut()
                         .for_each(|module| module.report());
@@ -515,20 +515,21 @@ where
             }
         } else {
             let filtered_indices = filtered_indices.as_ref().unwrap();
-            for idx in filtered_indices.iter() {
+            for idx in filtered_indices.iter().progress() {
                 let event = dataset.event_by_idx(*idx).unwrap();
                 self.real_modules.iter_mut().for_each(|module| {
                     if module.filter_event(&event, event_counter) {
                         let start = std::time::Instant::now();
                         module.analyze_event(&event, event_counter);
                         time_in_event_s += start.elapsed().as_secs_f64();
+
                     }
                 });
                 event_counter += 1;
 
                 // Give periodic updates
                 if event_counter % self.update_interval == 0 || event_counter == 1 {
-                    Anl::update_real_events(event_counter);
+                    //Anl::update_real_events(event_counter);
                     self.real_modules
                         .iter_mut()
                         .for_each(|module| module.report());
@@ -563,24 +564,24 @@ where
             .iter_mut()
             .for_each(|module| module.initialize(&out_dir));
 
-        Anl::make_announcment("EVENT LOOP");
-        let max_events = match self.max_mixed_events {
-            MixedEventMaximum::Factor(factor) => (factor * dataset.len() as f64) as usize,
-            MixedEventMaximum::Absolute(value) => value,
-        };
+    Anl::make_announcment("EVENT LOOP");
+    let max_events = match self.max_mixed_events {
+        MixedEventMaximum::Factor(factor) => (factor * dataset.len() as f64) as usize,
+        MixedEventMaximum::Absolute(value) => value,
+    };
 
-        let batch_size = Arc::new(Mutex::new(100_000_usize));
-        let target_successes = 100_000;
+    let batch_size = Arc::new(Mutex::new(100_000_usize));
+    let target_successes = 100_000;
 
-        let mut write_batch = Arc::new(Mutex::new(Vec::<E>::new()));
-        let mut read_batch = Arc::new(Mutex::new(Vec::<E>::new()));
-        let generator = Arc::new(Mutex::new(self.event_generator.as_mut().unwrap()));
+    let mut write_batch = Arc::new(Mutex::new(Vec::<E>::new()));
+    let mut read_batch = Arc::new(Mutex::new(Vec::<E>::new()));
+    let generator = Arc::new(Mutex::new(self.event_generator.as_mut().unwrap()));
 
-        let attempt = Arc::new(Mutex::new(0_usize));
-        let analyzed = Arc::new(Mutex::new(0_usize));
-        let prev_batch_attempts = Arc::new(Mutex::new(0_usize));
-        let overall_timer = std::time::Instant::now();
-        let mut timer = std::time::Instant::now();
+    let attempt = Arc::new(Mutex::new(0_usize));
+    let analyzed = Arc::new(Mutex::new(0_usize));
+    let prev_batch_attempts = Arc::new(Mutex::new(0_usize));
+    let overall_timer = std::time::Instant::now();
+    let mut timer = std::time::Instant::now();
         loop {
             std::mem::swap(&mut read_batch, &mut write_batch);
 
@@ -778,7 +779,6 @@ where
 
             let length = path_name.len();
             if !path_name[length - 4..].contains(".idx") {
-                // if the file is not marked as an rkyv file, don't try to read it as one
                 continue;
             }
 

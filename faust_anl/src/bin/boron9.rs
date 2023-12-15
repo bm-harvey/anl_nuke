@@ -23,7 +23,8 @@ fn main() {
         .with_particles(1, 1, 1);
     //mixer.set_faust_filter();
 
-    let system = "si28_c_35";
+    let system = "c12_si_35";
+    //let system = "si28_c_35";
 
     Anl::new()
         .with_filter(filter)
